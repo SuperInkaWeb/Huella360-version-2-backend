@@ -35,6 +35,10 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        if (request.rol() == Role.ADMIN) {
+            throw new ForbiddenException("No se puede registrar un usuario con rol ADMIN");
+        }
+
         if (usuarioRepository.findByCorreo(request.correo()).isPresent()) {
             throw new BusinessException("El correo ya está registrado");
         }
