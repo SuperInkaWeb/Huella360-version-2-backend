@@ -160,11 +160,7 @@ public class ClienteService {
         PerfilCliente perfil = clienteRepository.findById(perfilId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente", "id", perfilId));
 
-        boolean esClienteDeLaEmpresa = clienteRepository
-                .findClientesByEmpresaId(empresa.getId(), null, Pageable.unpaged())
-                .getContent()
-                .stream()
-                .anyMatch(c -> c.getId().equals(perfilId));
+        boolean esClienteDeLaEmpresa = clienteRepository.existsByEmpresaIdAndClienteId(empresa.getId(), perfilId);
 
         if (!esClienteDeLaEmpresa) {
             throw new ForbiddenException("No tienes acceso al perfil de este cliente.");

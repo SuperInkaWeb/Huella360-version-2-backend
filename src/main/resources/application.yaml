@@ -17,18 +17,10 @@ spring:
       max-lifetime: 1800000
       leak-detection-threshold: 60000
 
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      timeout: 5000
-
   cache:
-    type: redis
-    redis:
-      time-to-live: 600000
-      cache-null-values: false
+    type: simple
+    caffeine:
+      specs: maximumSize=500,expireAfterWrite=600s
 
   jpa:
     open-in-view: false
@@ -66,8 +58,6 @@ spring:
 management:
   health:
     db:
-      enabled: false
-    redis:
       enabled: false
   endpoints:
     web:

@@ -47,7 +47,6 @@ jobs:
           APP_ENCRYPTION_SECRET: test-encryption-secret-32-chars!!
           AUTH0_ISSUER_URI: https://test.auth0.com/
           AUTH0_AUDIENCE: test-audience
-          REDIS_HOST: localhost
         run: mvn test -q
 
       - name: Package

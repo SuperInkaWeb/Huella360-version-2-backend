@@ -33,6 +33,7 @@ public class IaService {
     private final ObjectMapper objectMapper;
     private final SubscriptionService subscriptionService;
     private final IaUsageRepository iaUsageRepository;
+    private final RestTemplate restTemplate;
 
     @Transactional
     public HealthAlertResponse generateHealthAlerts(Usuario usuario, HealthAlertRequest request) {
@@ -125,8 +126,6 @@ public class IaService {
 
         String model = appProperties.getIa().getGroqModel();
         String apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-
-        RestTemplate restTemplate = new RestTemplate();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

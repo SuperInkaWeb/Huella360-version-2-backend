@@ -102,8 +102,7 @@ public class VeterinarioService {
 
     @Transactional(readOnly = true)
     public List<VeterinarioResponse> getAllVerifiedVeterinarians() {
-        return veterinarioRepository.findAll().stream()
-                .filter(v -> v.getEstadoValidacion() == VerificationStatus.VERIFICADO)
+        return veterinarioRepository.findByEstadoValidacion(VerificationStatus.VERIFICADO).stream()
                 .map(this::mapToResponse)
                 .toList();
     }

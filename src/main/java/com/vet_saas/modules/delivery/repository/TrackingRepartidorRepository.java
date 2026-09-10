@@ -22,4 +22,8 @@ public interface TrackingRepartidorRepository extends JpaRepository<TrackingRepa
     @Modifying
     @Query("DELETE FROM TrackingRepartidor t WHERE t.delivery.id = :deliveryId")
     void deleteByDeliveryId(@Param("deliveryId") Long deliveryId);
+
+    @Modifying
+    @Query("DELETE FROM TrackingRepartidor t WHERE t.registradoAt < :fecha")
+    int deleteByRegistradoAtBefore(@Param("fecha") java.time.Instant fecha);
 }

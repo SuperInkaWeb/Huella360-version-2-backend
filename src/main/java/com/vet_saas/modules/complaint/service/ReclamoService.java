@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.Map;
 
@@ -36,8 +38,8 @@ public class ReclamoService {
 
         // 1. Subir archivo de sustento del cliente (Opcional)
         if (archivo != null && !archivo.isEmpty()) {
-            try {
-                Map<?, ?> uploadResult = cloudinary.uploader().upload(archivo.getBytes(), ObjectUtils.emptyMap());
+            try (InputStream inputStream = archivo.getInputStream()) {
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(inputStream, ObjectUtils.emptyMap());
                 archivoUrl = uploadResult.get("url").toString();
             } catch (Exception e) {
                 LOGGER.error("Error al subir archivo de sustento: {}", e.getMessage());
@@ -110,7 +112,6 @@ public class ReclamoService {
 
     private String subirPdfACloudinary(byte[] pdfBytes, Long reclamoId) {
         try {
-            // Usamos "image" y format "pdf" para que Cloudinary permita visualizarlo en el navegador
             Map<String, Object> options = ObjectUtils.asMap(
                     "resource_type", "image",
                     "public_id", "reclamos/reclamo_" + String.format("%06d", reclamoId),
@@ -118,7 +119,10 @@ public class ReclamoService {
                     "flags", "attachment"
             );
 
-            Map<?, ?> uploadResult = cloudinary.uploader().upload(pdfBytes, options);
+            Map<?, ?> uploadResult;
+            try (InputStream inputStream = new ByteArrayInputStream(pdfBytes)) {
+                uploadResult = cloudinary.uploader().upload(inputStream, options);
+            }
             return uploadResult.get("secure_url").toString();
         } catch (Exception e) {
             LOGGER.error("Error al subir el PDF de reclamo a Cloudinary: {}", e.getMessage(), e);

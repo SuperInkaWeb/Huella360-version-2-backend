@@ -45,4 +45,12 @@ public interface ClienteRepository extends JpaRepository<PerfilCliente, Long> {
                         @Param("q") String q,
                         Pageable pageable);
 
+        @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM PerfilCliente c " +
+                        "JOIN c.usuario u " +
+                        "WHERE c.id = :clienteId " +
+                        "AND c.activo = true " +
+                        "AND (EXISTS (SELECT 1 FROM Orden o WHERE o.usuarioCliente.id = u.id AND o.empresa.id = :empresaId) " +
+                        "     OR EXISTS (SELECT 1 FROM Cita ci WHERE ci.cliente.id = u.id AND ci.empresa.id = :empresaId))")
+        boolean existsByEmpresaIdAndClienteId(@Param("empresaId") Long empresaId, @Param("clienteId") Long clienteId);
+
 }

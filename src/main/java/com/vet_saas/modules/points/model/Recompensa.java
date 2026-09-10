@@ -45,9 +45,11 @@ public class Recompensa {
     private BigDecimal valorDescuento;
 
     @Column(name = "aplica_a_ciertos_productos")
+    @Builder.Default
     private Boolean aplicaACiertosProductos = false;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean activo = true;
 
     @ManyToMany(fetch = FetchType.LAZY)

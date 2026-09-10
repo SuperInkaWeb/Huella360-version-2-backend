@@ -56,7 +56,6 @@ docker compose down
 Los servicios incluidos:
 - **app**: Backend Spring Boot (puerto 8080)
 - **postgres**: PostgreSQL 16 (puerto 5432)
-- **redis**: Redis 7 (puerto 6379)
 - **mailhog**: Testing de emails (dev, puerto 8025)
 
 ## Despliegue en Producción
@@ -95,7 +94,7 @@ openssl rand -base64 32  # Para APP_ENCRYPTION_SECRET
 
 ```bash
 # Levantar infraestructura
-docker compose up -d postgres redis mailhog
+docker compose up -d postgres mailhog
 
 # Ejecutar la app
 ./mvnw spring-boot:run

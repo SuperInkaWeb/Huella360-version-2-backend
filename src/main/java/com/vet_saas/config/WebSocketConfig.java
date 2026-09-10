@@ -3,9 +3,7 @@ package com.vet_saas.config;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.security.jwt.JwtService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -23,11 +21,13 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Configuration
 @EnableWebSocketMessageBroker
-@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtService jwtService;
@@ -36,6 +36,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final Map<Long, CachedUser> userCache = new ConcurrentHashMap<>();
     private static final long CACHE_TTL_MS = 300_000; // 5 minutos
+    private static final int MAX_CACHE_SIZE = 100;
 
     private record CachedUser(Usuario usuario, long timestamp) {
         boolean isExpired() {
@@ -43,28 +44,28 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
     }
 
-    @Value("${spring.profiles.active:}")
-    private String activeProfile;
+    public WebSocketConfig(JwtService jwtService, UsuarioRepository usuarioRepository, AppProperties appProperties) {
+        this.jwtService = jwtService;
+        this.usuarioRepository = usuarioRepository;
+        this.appProperties = appProperties;
 
-    @Value("${spring.data.redis.host:localhost}")
-    private String redisHost;
-
-    @Value("${spring.data.redis.port:6379}")
-    private int redisPort;
+        // Limpiar entradas expiradas cada 5 minutos
+        ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "ws-cache-cleaner");
+            t.setDaemon(true);
+            return t;
+        });
+        cleaner.scheduleAtFixedRate(() -> {
+            long now = System.currentTimeMillis();
+            userCache.entrySet().removeIf(e -> now - e.getValue().timestamp() > CACHE_TTL_MS);
+        }, 5, 5, TimeUnit.MINUTES);
+    }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        if (isProductionProfile()) {
-            config.enableStompBrokerRelay("/topic", "/queue")
-                    .setRelayHost(redisHost)
-                    .setRelayPort(redisPort)
-                    .setClientLogin(appProperties.getWebSocket().getClientLogin())
-                    .setClientPasscode(appProperties.getWebSocket().getClientPasscode())
-                    .setSystemLogin(appProperties.getWebSocket().getSystemLogin())
-                    .setSystemPasscode(appProperties.getWebSocket().getSystemPasscode());
-        } else {
-            config.enableSimpleBroker("/topic", "/queue");
-        }
+        // Usar broker en memoria en todos los perfiles (ahorra ~100MB de Redis)
+        // Con 1 instancia en plan $7 no necesitamos broker distribuido
+        config.enableSimpleBroker("/topic", "/queue");
         config.setApplicationDestinationPrefixes("/app");
         config.setUserDestinationPrefix("/user");
     }
@@ -103,6 +104,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             } else {
                                 userDetails = usuarioRepository.findById(userId).orElse(null);
                                 if (userDetails != null) {
+                                    // Limitar tamaño del cache
+                                    if (userCache.size() >= MAX_CACHE_SIZE) {
+                                        userCache.clear();
+                                    }
                                     userCache.put(userId, new CachedUser(userDetails, System.currentTimeMillis()));
                                 }
                             }
@@ -111,7 +116,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                                         userDetails, null, userDetails.getAuthorities());
                                 accessor.setUser(auth);
-                                log.info("WS CONNECT autenticado para el usuario: {}", userDetails.getUsername());
+                                log.debug("WS CONNECT autenticado para el usuario: {}", userDetails.getUsername());
                             } else {
                                 log.warn("WS CONNECT rechazado: token inválido");
                                 return null;
@@ -128,9 +133,5 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 return message;
             }
         });
-    }
-
-    private boolean isProductionProfile() {
-        return activeProfile.contains("prod");
     }
 }

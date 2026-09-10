@@ -1,42 +1,40 @@
 package com.vet_saas.config;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.cache.RedisCacheConfiguration;
-import org.springframework.data.redis.cache.RedisCacheManager;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.RedisSerializationContext;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 @Configuration
 @EnableCaching
-@ConditionalOnBean(RedisConnectionFactory.class)
 public class CacheConfig {
 
     @Bean
-    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(10))
-                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()))
-                .disableCachingNullValues();
-
-        return RedisCacheManager.builder(connectionFactory)
-                .cacheDefaults(config)
-                .withCacheConfiguration("categorias", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(30)))
-                .withCacheConfiguration("productosById", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(15)))
-                .withCacheConfiguration("empresasById", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(15)))
-                .withCacheConfiguration("empresasByUsername", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(15)))
-                .withCacheConfiguration("empresasByPropietario", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(10)))
-                .withCacheConfiguration("dashboardMetrics", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(3)))
-                .withCacheConfiguration("dashboardChart", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(5)))
-                .withCacheConfiguration("dashboardActivity", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(2)))
-                .build();
+    public CacheManager cacheManager() {
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+        cacheManager.setCaffeine(Caffeine.newBuilder()
+                .maximumSize(500)
+                .expireAfterWrite(10, TimeUnit.MINUTES));
+        cacheManager.registerCustomCache("categorias",
+                Caffeine.newBuilder().maximumSize(100).expireAfterWrite(30, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("productosById",
+                Caffeine.newBuilder().maximumSize(200).expireAfterWrite(15, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("empresasById",
+                Caffeine.newBuilder().maximumSize(200).expireAfterWrite(15, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("empresasByUsername",
+                Caffeine.newBuilder().maximumSize(200).expireAfterWrite(15, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("empresasByPropietario",
+                Caffeine.newBuilder().maximumSize(200).expireAfterWrite(10, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("dashboardMetrics",
+                Caffeine.newBuilder().maximumSize(50).expireAfterWrite(3, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("dashboardChart",
+                Caffeine.newBuilder().maximumSize(50).expireAfterWrite(5, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("dashboardActivity",
+                Caffeine.newBuilder().maximumSize(50).expireAfterWrite(2, TimeUnit.MINUTES).build());
+        return cacheManager;
     }
 }

@@ -30,10 +30,17 @@ USER appuser
 
 EXPOSE 8080
 
-# JVM tuning para contenedores
+# JVM tuning para contenedores con poca memoria (512MB plan Render)
+# - MaxRAMPercentage=50: Usa max 256MB para heap (deja ~256MB para OS, metaspace, stack, etc)
+# - MaxMetaspaceSize=128m: Limita metaspace para evitar crecimiento indefinido
+# - ZGC: Garbage collector de baja latencia y bajo overhead de memoria
+# - TrimNativeHeap: Libera memoria nativa al GC
 ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-XX:InitialRAMPercentage=50.0", \
+    "-XX:MaxRAMPercentage=50.0", \
+    "-XX:InitialRAMPercentage=40.0", \
+    "-XX:MaxMetaspaceSize=128m", \
+    "-XX:+UseZGC", \
+    "-XX:+ZGenerational", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]

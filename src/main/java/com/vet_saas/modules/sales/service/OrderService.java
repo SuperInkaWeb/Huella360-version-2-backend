@@ -328,7 +328,7 @@ public class OrderService {
         if (usuario.getRol() == Role.CLIENTE) {
             try {
                 clienteRepository.findByUsuarioId(usuario.getId()).ifPresent(perfil -> {
-                    long ordersCount = ordenRepository.findByUsuarioClienteId(usuario.getId(), Pageable.unpaged()).getTotalElements();
+                    long ordersCount = ordenRepository.countByUsuarioClienteId(usuario.getId());
                     if (ordersCount == 1) {
                         pointsService.addPoints(perfil.getId(), "PRIMERA_COMPRA", orden.getId(), "¡Felicidades por tu primera compra!");
                     } else {

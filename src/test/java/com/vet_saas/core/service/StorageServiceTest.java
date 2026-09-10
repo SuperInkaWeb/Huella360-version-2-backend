@@ -80,15 +80,16 @@ class StorageServiceTest {
     @SuppressWarnings("unchecked")
     void uploadFile_validJpeg_returnsUrl() throws Exception {
         byte[] jpegBytes = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10};
-        InputStream jpegStream = new ByteArrayInputStream(jpegBytes);
 
         when(file.isEmpty()).thenReturn(false);
         when(file.getSize()).thenReturn((long) jpegBytes.length);
         when(file.getContentType()).thenReturn("image/jpeg");
         when(file.getOriginalFilename()).thenReturn("photo.jpg");
-        when(file.getInputStream()).thenReturn(jpegStream);
-        when(file.getBytes()).thenReturn(jpegBytes);
-        when(uploader.upload(any(byte[].class), any(Map.class)))
+        // Devolver un stream fresco en cada llamada (validateMagicBytes consume el primero)
+        when(file.getInputStream())
+                .thenReturn(new ByteArrayInputStream(jpegBytes))
+                .thenReturn(new ByteArrayInputStream(jpegBytes));
+        when(uploader.upload(any(InputStream.class), any(Map.class)))
                 .thenReturn(Map.of("secure_url", "https://res.cloudinary.com/test/image/upload/v1/photo.jpg"));
 
         String url = storageService.uploadFile(file, "mascotas");
@@ -99,15 +100,15 @@ class StorageServiceTest {
     @Test
     void uploadFile_cloudinaryReturnsNull_throwsBusinessException() throws Exception {
         byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A};
-        InputStream pngStream = new ByteArrayInputStream(pngBytes);
 
         when(file.isEmpty()).thenReturn(false);
         when(file.getSize()).thenReturn((long) pngBytes.length);
         when(file.getContentType()).thenReturn("image/png");
         when(file.getOriginalFilename()).thenReturn("photo.png");
-        when(file.getInputStream()).thenReturn(pngStream);
-        when(file.getBytes()).thenReturn(pngBytes);
-        when(uploader.upload(any(byte[].class), any(Map.class))).thenReturn(null);
+        when(file.getInputStream())
+                .thenReturn(new ByteArrayInputStream(pngBytes))
+                .thenReturn(new ByteArrayInputStream(pngBytes));
+        when(uploader.upload(any(InputStream.class), any(Map.class))).thenReturn(null);
 
         assertThrows(BusinessException.class, () -> storageService.uploadFile(file, "test"));
     }

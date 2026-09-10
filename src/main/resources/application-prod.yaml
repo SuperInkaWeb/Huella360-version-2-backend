@@ -17,6 +17,9 @@ spring:
   flyway:
     enabled: true
 
+  cache:
+    type: simple
+
 management:
   endpoints:
     web:

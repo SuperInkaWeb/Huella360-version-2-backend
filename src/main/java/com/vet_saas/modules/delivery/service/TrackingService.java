@@ -11,9 +11,11 @@ import com.vet_saas.modules.delivery.repository.RepartidorRepository;
 import com.vet_saas.modules.delivery.repository.TrackingRepartidorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 
 @Service
@@ -81,6 +83,20 @@ public class TrackingService {
             .distanciaRestanteKm(pos.getDistanciaAlDestinoKm())
             .timestamp(Instant.now())
             .build();
+    }
+
+    /**
+     * Limpia registros de tracking antiguos (7+ dias) para evitar crecimiento indefinido de la tabla.
+     * Se ejecuta diariamente a las 4:00 AM.
+     */
+    @Scheduled(cron = "0 0 4 * * ?")
+    @Transactional
+    public void cleanOldTrackingData() {
+        Instant cutoff = Instant.now().minus(Duration.ofDays(7));
+        int deleted = trackingRepository.deleteByRegistradoAtBefore(cutoff);
+        if (deleted > 0) {
+            log.info("Cleaned {} old tracking records (older than 7 days)", deleted);
+        }
     }
 
     /** Distancia Haversine entre dos puntos (en km) */
