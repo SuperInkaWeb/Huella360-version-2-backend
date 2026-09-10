@@ -12,7 +12,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -89,7 +88,9 @@ class StorageServiceTest {
         when(file.getInputStream())
                 .thenReturn(new ByteArrayInputStream(jpegBytes))
                 .thenReturn(new ByteArrayInputStream(jpegBytes));
-        when(uploader.upload(any(InputStream.class), any(Map.class)))
+        when(file.getBytes()).thenReturn(jpegBytes);
+
+        when(uploader.upload(any(byte[].class), any(Map.class)))
                 .thenReturn(Map.of("secure_url", "https://res.cloudinary.com/test/image/upload/v1/photo.jpg"));
 
         String url = storageService.uploadFile(file, "mascotas");
@@ -108,7 +109,9 @@ class StorageServiceTest {
         when(file.getInputStream())
                 .thenReturn(new ByteArrayInputStream(pngBytes))
                 .thenReturn(new ByteArrayInputStream(pngBytes));
-        when(uploader.upload(any(InputStream.class), any(Map.class))).thenReturn(null);
+        when(file.getBytes()).thenReturn(pngBytes);
+
+        when(uploader.upload(any(byte[].class), any(Map.class))).thenReturn(null);
 
         assertThrows(BusinessException.class, () -> storageService.uploadFile(file, "test"));
     }
