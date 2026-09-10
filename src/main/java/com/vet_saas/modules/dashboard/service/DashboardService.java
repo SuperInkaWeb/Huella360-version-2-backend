@@ -33,7 +33,7 @@ public class DashboardService {
     private final CitaRepository citaRepository;
     private final EmpresaRepository empresaRepository;
 
-    @Cacheable(value = "empresasByPropietario", key = "#usuarioId")
+    @Cacheable(value = "empresaIdsByPropietario", key = "#usuarioId")
     public Long resolveEmpresaId(Long usuarioId) {
         return empresaRepository.findByUsuarioPropietarioId(usuarioId)
                 .orElseThrow(() -> new IllegalStateException("Empresa no encontrada para el propietario actual"))

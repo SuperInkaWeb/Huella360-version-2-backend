@@ -29,6 +29,10 @@ public class CacheConfig {
                 Caffeine.newBuilder().maximumSize(200).expireAfterWrite(15, TimeUnit.MINUTES).build());
         cacheManager.registerCustomCache("empresasByPropietario",
                 Caffeine.newBuilder().maximumSize(200).expireAfterWrite(10, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("empresasOptionalByPropietario",
+                Caffeine.newBuilder().maximumSize(200).expireAfterWrite(10, TimeUnit.MINUTES).build());
+        cacheManager.registerCustomCache("empresaIdsByPropietario",
+                Caffeine.newBuilder().maximumSize(200).expireAfterWrite(10, TimeUnit.MINUTES).build());
         cacheManager.registerCustomCache("dashboardMetrics",
                 Caffeine.newBuilder().maximumSize(50).expireAfterWrite(3, TimeUnit.MINUTES).build());
         cacheManager.registerCustomCache("dashboardChart",

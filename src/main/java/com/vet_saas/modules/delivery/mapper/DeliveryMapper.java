@@ -3,11 +3,14 @@ package com.vet_saas.modules.delivery.mapper;
 import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
+import com.vet_saas.modules.delivery.dto.response.DeliveryEmpresaResponseDTO;
 import com.vet_saas.modules.delivery.dto.response.RepartidorResponseDTO;
 import com.vet_saas.modules.delivery.model.Delivery;
 import com.vet_saas.modules.delivery.model.Repartidor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -17,13 +20,16 @@ public class DeliveryMapper {
 
     public DeliveryResponseDTO toResponseDTO(Delivery delivery) {
         if (delivery == null) return null;
+        PerfilCliente cliente = getCliente(delivery);
 
         return DeliveryResponseDTO.builder()
                 .idDelivery(delivery.getId())
                 .ordenId(delivery.getOrden() != null ? delivery.getOrden().getId() : null)
+                .empresaId(delivery.getOrden() != null && delivery.getOrden().getEmpresa() != null
+                        ? delivery.getOrden().getEmpresa().getId() : null)
                 .estado(delivery.getEstado())
-                .clienteNombre(getClienteNombre(delivery))
-                .clienteTelefono(getClienteTelefono(delivery))
+                .clienteNombre(cliente != null ? cliente.getNombres() + " " + cliente.getApellidos() : "Cliente")
+                .clienteTelefono(cliente != null ? cliente.getTelefono() : null)
                 .repartidorId(delivery.getRepartidor() != null ? delivery.getRepartidor().getIdRepartidor() : null)
                 .repartidorNombre(getRepartidorNombre(delivery))
                 .repartidorFoto(delivery.getRepartidor() != null ? delivery.getRepartidor().getFotoPerfil() : null)
@@ -87,22 +93,51 @@ public class DeliveryMapper {
                 .build();
     }
 
+    public DeliveryEmpresaResponseDTO toEmpresaResponseDTO(Delivery delivery) {
+        PerfilCliente cliente = getCliente(delivery);
+        Repartidor repartidor = delivery.getRepartidor();
+        List<String> productos = delivery.getOrden().getDetalles().stream()
+            .map(detalle -> detalle.getCantidad() + " x " +
+                (detalle.getProducto() != null ? detalle.getProducto().getNombre() : "Producto"))
+            .toList();
+        int totalUnidades = delivery.getOrden().getDetalles().stream()
+            .mapToInt(detalle -> detalle.getCantidad() != null ? detalle.getCantidad() : 0)
+            .sum();
+
+        return DeliveryEmpresaResponseDTO.builder()
+            .idDelivery(delivery.getId())
+            .ordenId(delivery.getOrden().getId())
+            .codigoOrden(delivery.getOrden().getCodigoOrden())
+            .estado(delivery.getEstado())
+            .clienteNombre(cliente != null ? cliente.getNombres() + " " + cliente.getApellidos()
+                : delivery.getOrden().getGuestNombre())
+            .clienteTelefono(cliente != null ? cliente.getTelefono() : null)
+            .totalUnidades(totalUnidades)
+            .productos(productos)
+            .repartidorId(repartidor != null ? repartidor.getIdRepartidor() : null)
+            .repartidorNombre(repartidor != null ? repartidor.getNombres() + " " + repartidor.getApellidos() : null)
+            .repartidorTelefono(repartidor != null ? repartidor.getTelefono() : null)
+            .repartidorVehiculo(repartidor != null && repartidor.getTipoVehiculo() != null ? repartidor.getTipoVehiculo().name() : null)
+            .repartidorPlaca(repartidor != null ? repartidor.getPlacaVehiculo() : null)
+            .repartidorLat(repartidor != null ? repartidor.getUbicacionLat() : null)
+            .repartidorLng(repartidor != null ? repartidor.getUbicacionLng() : null)
+            .origenLat(delivery.getOrigenLat()).origenLng(delivery.getOrigenLng()).origenDireccion(delivery.getOrigenDireccion())
+            .destinoLat(delivery.getDestinoLat()).destinoLng(delivery.getDestinoLng()).destinoDireccion(delivery.getDestinoDireccion())
+            .destinoReferencia(delivery.getDestinoReferencia())
+            .fotoEntregaUrl(delivery.getFotoEntregaUrl())
+            .createdAt(delivery.getCreatedAt()).asignadoAt(delivery.getAsignadoAt()).entregadoAt(delivery.getEntregadoAt())
+            .empresaConfirmadoAt(delivery.getEmpresaConfirmadoAt())
+            .build();
+    }
+
     private String getRepartidorNombre(Delivery delivery) {
         if (delivery.getRepartidor() == null) return null;
         return delivery.getRepartidor().getNombres() + " " + delivery.getRepartidor().getApellidos();
     }
 
-    private String getClienteNombre(Delivery delivery) {
-        if (delivery.getOrden() == null || delivery.getOrden().getUsuarioCliente() == null) return "Cliente";
-        return clienteRepository.findByUsuarioId(delivery.getOrden().getUsuarioCliente().getId())
-                .map(p -> p.getNombres() + " " + p.getApellidos())
-                .orElse("Cliente");
-    }
-
-    private String getClienteTelefono(Delivery delivery) {
+    private PerfilCliente getCliente(Delivery delivery) {
         if (delivery.getOrden() == null || delivery.getOrden().getUsuarioCliente() == null) return null;
         return clienteRepository.findByUsuarioId(delivery.getOrden().getUsuarioCliente().getId())
-                .map(PerfilCliente::getTelefono)
                 .orElse(null);
     }
 }

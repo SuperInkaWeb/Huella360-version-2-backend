@@ -13,6 +13,7 @@ public class DeliveryResponseDTO {
 
     private Long idDelivery;
     private Long ordenId;
+    private Long empresaId;
     private DeliveryStatus estado;
 
     // Datos del Cliente

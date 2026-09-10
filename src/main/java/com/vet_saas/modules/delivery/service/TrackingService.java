@@ -1,10 +1,12 @@
 package com.vet_saas.modules.delivery.service;
 
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
+import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.modules.delivery.dto.request.UbicacionDTO;
 import com.vet_saas.modules.delivery.dto.response.UbicacionEvent;
 import com.vet_saas.modules.delivery.model.Delivery;
 import com.vet_saas.modules.delivery.model.DeliveryStatus;
+import com.vet_saas.modules.delivery.model.Repartidor;
 import com.vet_saas.modules.delivery.model.TrackingRepartidor;
 import com.vet_saas.modules.delivery.repository.DeliveryRepository;
 import com.vet_saas.modules.delivery.repository.RepartidorRepository;
@@ -39,12 +41,20 @@ public class TrackingService {
      * 4. Retorna evento para broadcast WebSocket
      */
     @Transactional
-    public UbicacionEvent procesarUbicacion(Long deliveryId, UbicacionDTO pos, Long repartidorId) {
+    public UbicacionEvent procesarUbicacion(Long deliveryId, UbicacionDTO pos, Long usuarioId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery", "id", deliveryId));
 
+        Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Repartidor no encontrado para el usuario autenticado"));
+
+        if (delivery.getRepartidor() == null
+                || !delivery.getRepartidor().getIdRepartidor().equals(repartidor.getIdRepartidor())) {
+            throw new ForbiddenException("No eres el repartidor asignado a este delivery");
+        }
+
         // Actualizar ubicacion del repartidor (query optimizado, no UPDATE completo)
-        repartidorRepository.actualizarUbicacion(repartidorId, pos.getLat(), pos.getLng());
+        repartidorRepository.actualizarUbicacion(repartidor.getIdRepartidor(), pos.getLat(), pos.getLng());
 
         // Persistir punto de tracking en BD
         trackingRepository.save(TrackingRepartidor.builder()
@@ -62,7 +72,7 @@ public class TrackingService {
                 && pos.getDistanciaAlDestinoKm() <= UMBRAL_CERCA_KM) {
 
             deliveryService.cambiarEstado(deliveryId, DeliveryStatus.CERCA,
-                repartidorId, "Repartidor a menos de 500m del destino");
+                usuarioId, "Repartidor a menos de 500m del destino");
         }
 
         // Calcular tiempo estimado simple (velocidad promedio 30km/h en ciudad)

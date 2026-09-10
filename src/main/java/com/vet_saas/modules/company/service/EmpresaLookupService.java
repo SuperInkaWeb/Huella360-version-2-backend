@@ -25,7 +25,7 @@ public class EmpresaLookupService {
                         "Empresa", "propietarioId", usuario.getId()));
     }
 
-    @Cacheable(value = "empresasByPropietario", key = "#usuarioId")
+    @Cacheable(value = "empresasOptionalByPropietario", key = "#usuarioId")
     @Transactional(readOnly = true)
     public Optional<Empresa> getEmpresaByUsuarioId(Long usuarioId) {
         return empresaRepository.findByUsuarioPropietarioId(usuarioId);

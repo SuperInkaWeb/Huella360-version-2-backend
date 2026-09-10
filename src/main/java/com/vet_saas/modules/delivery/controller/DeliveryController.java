@@ -6,11 +6,11 @@ import com.vet_saas.modules.delivery.dto.request.CambiarEstadoDTO;
 import com.vet_saas.modules.delivery.dto.request.ConfirmarOTPDTO;
 import com.vet_saas.modules.delivery.dto.request.ReportarIncidenciaDTO;
 import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
+import com.vet_saas.modules.delivery.dto.response.DeliveryEmpresaResponseDTO;
 import com.vet_saas.modules.delivery.service.DeliveryService;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -54,6 +54,29 @@ public class DeliveryController {
         return ResponseEntity.ok(ApiResponse.success(deliveryService.cancelarDelivery(deliveryId, principal.getId()), "Delivery cancelado"));
     }
 
+    /** El cliente vuelve a publicar un envío fallido o con incidencia en el pool. */
+    @PostMapping("/{deliveryId}/reintentar-cliente")
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> reintentarComoCliente(
+            @PathVariable Long deliveryId,
+            @AuthenticationPrincipal Usuario principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+            deliveryService.reintentarDeliveryCliente(deliveryId, principal.getId()),
+            "Se está buscando un nuevo repartidor"
+        ));
+    }
+
+    /** Genera un PIN nuevo para el cliente e invalida inmediatamente el anterior. */
+    @PostMapping("/{deliveryId}/actualizar-pin")
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> actualizarPin(
+            @PathVariable Long deliveryId,
+            @AuthenticationPrincipal Usuario principal) {
+        String pin = deliveryService.regenerarOTP(deliveryId, principal.getId());
+        java.util.Map<String, String> data = java.util.Map.of("pin", pin);
+        return ResponseEntity.ok(ApiResponse.success(data, "PIN generado correctamente"));
+    }
+
     // ---- Repartidor ----
 
     /** El repartidor cambia el estado del delivery (EN_TIENDA, RECOGIDO, EN_CAMINO, etc.) */
@@ -74,8 +97,9 @@ public class DeliveryController {
     @PreAuthorize("hasRole('REPARTIDOR')")
     public ResponseEntity<ApiResponse<Void>> confirmarOTP(
             @PathVariable Long deliveryId,
-            @Valid @RequestBody ConfirmarOTPDTO dto) {
-        deliveryService.confirmarEntregaOTP(deliveryId, dto);
+            @Valid @RequestBody ConfirmarOTPDTO dto,
+            @AuthenticationPrincipal Usuario principal) {
+        deliveryService.confirmarEntregaOTP(deliveryId, dto, principal.getId());
         return ResponseEntity.ok(ApiResponse.success(null, "Entrega confirmada con OTP"));
     }
 
@@ -87,7 +111,7 @@ public class DeliveryController {
             @RequestParam("foto") MultipartFile foto,
             @AuthenticationPrincipal Usuario principal) {
         deliveryService.confirmarEntregaFoto(deliveryId, foto, principal.getId());
-        return ResponseEntity.ok(ApiResponse.success(null, "Entrega confirmada con foto"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Evidencia fotográfica guardada"));
     }
 
     /** Reportar intento fallido (nadie abre la puerta) */
@@ -167,6 +191,26 @@ public class DeliveryController {
     }
 
     // ---- Empresa (dashboard) ----
+
+    /** Historial y seguimiento de los envíos pertenecientes a la empresa autenticada. */
+    @GetMapping("/empresa/seguimiento")
+    @PreAuthorize("hasRole('EMPRESA')")
+    public ResponseEntity<ApiResponse<java.util.List<DeliveryEmpresaResponseDTO>>> seguimientoEmpresa(
+            @AuthenticationPrincipal Usuario principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+            deliveryService.getSeguimientoEmpresa(principal.getId()), "Seguimiento de deliveries"));
+    }
+
+    /** La empresa confirma una entrega y cierra el seguimiento GPS de ese pedido. */
+    @PostMapping("/{deliveryId}/confirmar-empresa")
+    @PreAuthorize("hasRole('EMPRESA')")
+    public ResponseEntity<ApiResponse<DeliveryEmpresaResponseDTO>> confirmarEntregaEmpresa(
+            @PathVariable Long deliveryId,
+            @AuthenticationPrincipal Usuario principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+            deliveryService.confirmarEntregaEmpresa(deliveryId, principal.getId()),
+            "Entrega confirmada por la empresa"));
+    }
 
     /** Ver detalle de un delivery específico */
     @GetMapping("/{deliveryId}")

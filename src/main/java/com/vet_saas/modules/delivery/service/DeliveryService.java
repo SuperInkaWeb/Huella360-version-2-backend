@@ -9,6 +9,7 @@ import com.vet_saas.modules.delivery.dto.request.CalificacionDTO;
 import com.vet_saas.modules.delivery.dto.request.ConfirmarOTPDTO;
 import com.vet_saas.modules.delivery.dto.request.CrearDeliveryDTO;
 import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
+import com.vet_saas.modules.delivery.dto.response.DeliveryEmpresaResponseDTO;
 import com.vet_saas.modules.delivery.dto.response.EstadoDeliveryEvent;
 import com.vet_saas.modules.delivery.event.DeliveryStatusChangedEvent;
 import com.vet_saas.modules.delivery.mapper.DeliveryMapper;
@@ -26,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -33,9 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.SecureRandom;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.stream.Collectors;
 
 @Service
@@ -57,6 +61,7 @@ public class DeliveryService {
     private final PointsService pointsService;
     private final ClienteRepository clienteRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final JdbcTemplate jdbcTemplate;
 
     private static final int OTP_EXPIRACION_HORAS = 4;
     private static final String CLOUDINARY_FOLDER_DELIVERY = "deliveries/confirmaciones";
@@ -74,6 +79,17 @@ public class DeliveryService {
         if (deliveryRepository.existsByOrdenId(orden.getId())) {
             log.warn("Delivery ya existe para la orden {}", orden.getId());
             return null;
+        }
+
+        if (dto.getOrigenLat() == null || dto.getOrigenLng() == null) {
+            throw new BusinessException(
+                "No se puede crear el delivery: la veterinaria no tiene coordenadas configuradas"
+            );
+        }
+        if (dto.getDestinoLat() == null || dto.getDestinoLng() == null) {
+            throw new BusinessException(
+                "No se puede crear el delivery: la orden no tiene coordenadas de destino"
+            );
         }
 
         double distanciaKm = calcularDistanciaHaversine(
@@ -118,10 +134,12 @@ public class DeliveryService {
     }
 
     // =========================================================
-    // PUNTO 1: ACEPTAR PEDIDO - PESSIMISTIC_WRITE
+    // PUNTO 1: ACEPTAR PEDIDO - bloqueos sobre delivery y repartidor
     // =========================================================
     public DeliveryResponseDTO aceptarPedido(Long deliveryId, Long usuarioId) {
-        Delivery delivery = deliveryRepository.findById(deliveryId)
+        // Esta lectura genera SELECT ... FOR UPDATE. La validacion del estado y la
+        // asignacion quedan serializadas para un mismo delivery hasta el commit.
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado"));
 
         if (delivery.getEstado() != DeliveryStatus.BUSCANDO_REPARTIDOR) {
@@ -190,7 +208,10 @@ public class DeliveryService {
     // =========================================================
     // PUNTO 2: RECHAZAR PEDIDO - UPDATE atómico
     // =========================================================
-    public DeliveryResponseDTO rechazarPedido(Long deliveryId, Long repartidorId) {
+    public DeliveryResponseDTO rechazarPedido(Long deliveryId, Long usuarioId) {
+        Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Perfil de repartidor no encontrado"));
+        Long repartidorId = repartidor.getIdRepartidor();
         int filasAfectadas = deliveryRepository.liberarSiAsignadoA(deliveryId, repartidorId);
 
         if (filasAfectadas == 0) {
@@ -327,9 +348,16 @@ public class DeliveryService {
     // =========================================================
     // CONFIRMACION POR OTP
     // =========================================================
-    public void confirmarEntregaOTP(Long deliveryId, ConfirmarOTPDTO dto) {
-        Delivery delivery = deliveryRepository.findById(deliveryId)
+    public void confirmarEntregaOTP(Long deliveryId, ConfirmarOTPDTO dto, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+        Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Perfil de repartidor no encontrado"));
+        if (delivery.getRepartidor() == null
+                || !delivery.getRepartidor().getIdRepartidor().equals(repartidor.getIdRepartidor())) {
+            throw new BusinessException("No autorizado para confirmar este delivery");
+        }
 
         if (delivery.getEstado() != DeliveryStatus.EN_CAMINO
                 && delivery.getEstado() != DeliveryStatus.CERCA) {
@@ -344,26 +372,62 @@ public class DeliveryService {
             throw new BusinessException("Código OTP incorrecto");
         }
 
-        cambiarEstado(deliveryId, DeliveryStatus.ENTREGADO, null, "Confirmado por código OTP");
+        if (delivery.getFotoEntregaUrl() == null || delivery.getFotoEntregaUrl().isBlank()) {
+            throw new BusinessException("Debes subir una foto de evidencia antes de confirmar la entrega");
+        }
+
+        cambiarEstado(deliveryId, DeliveryStatus.ENTREGADO, usuarioId, "Confirmado con PIN y foto de evidencia");
+    }
+
+    /** Regenera el PIN del propietario de la compra e invalida inmediatamente el anterior. */
+    public String regenerarOTP(Long deliveryId, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+        if (delivery.getOrden().getUsuarioCliente() == null
+                || !delivery.getOrden().getUsuarioCliente().getId().equals(usuarioId)) {
+            throw new BusinessException("No autorizado para actualizar el PIN de este delivery");
+        }
+        if (delivery.getEstado().esFinal()) {
+            throw new BusinessException("No se puede actualizar el PIN de un delivery finalizado");
+        }
+        if (delivery.getRepartidor() == null) {
+            throw new BusinessException("El PIN solo puede generarse cuando ya existe un repartidor asignado");
+        }
+
+        String otpPlano = generarYGuardarOTP(delivery);
+        return otpPlano;
     }
 
     // =========================================================
     // CONFIRMACION POR FOTO
     // =========================================================
-    public void confirmarEntregaFoto(Long deliveryId, MultipartFile foto, Long repartidorId) {
-        Delivery delivery = deliveryRepository.findById(deliveryId)
+    public void confirmarEntregaFoto(Long deliveryId, MultipartFile foto, Long usuarioId) {
+        if (foto == null || foto.isEmpty()) {
+            throw new BusinessException("La foto de evidencia es obligatoria");
+        }
+        if (foto.getContentType() == null || !foto.getContentType().startsWith("image/")) {
+            throw new BusinessException("El archivo de evidencia debe ser una imagen");
+        }
+
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
 
+        Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Perfil de repartidor no encontrado"));
+
         if (delivery.getRepartidor() == null ||
-                !delivery.getRepartidor().getIdRepartidor().equals(repartidorId)) {
+                !delivery.getRepartidor().getIdRepartidor().equals(repartidor.getIdRepartidor())) {
             throw new BusinessException("No autorizado para confirmar este delivery");
+        }
+        if (delivery.getEstado() != DeliveryStatus.EN_CAMINO
+                && delivery.getEstado() != DeliveryStatus.CERCA) {
+            throw new BusinessException("La evidencia solo puede subirse cuando el pedido está en camino o cerca");
         }
 
         String fotoUrl = cloudinaryService.uploadFile(foto, CLOUDINARY_FOLDER_DELIVERY);
         delivery.setFotoEntregaUrl(fotoUrl);
         deliveryRepository.save(delivery);
-
-        cambiarEstado(deliveryId, DeliveryStatus.ENTREGADO, repartidorId, "Confirmado con foto de entrega");
     }
 
     // =========================================================
@@ -464,12 +528,25 @@ public class DeliveryService {
         return reintentarInternal(delivery, usuarioId);
     }
 
+    @Transactional
+    public DeliveryResponseDTO reintentarDeliveryCliente(Long deliveryId, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+        if (delivery.getOrden().getUsuarioCliente() == null
+                || !delivery.getOrden().getUsuarioCliente().getId().equals(usuarioId)) {
+            throw new BusinessException("No autorizado para reintentar este delivery");
+        }
+        return reintentarInternal(delivery, usuarioId);
+    }
+
     private DeliveryResponseDTO reintentarInternal(Delivery delivery, Long usuarioId) {
         if (delivery.getEstado() != DeliveryStatus.FALLIDO && delivery.getEstado() != DeliveryStatus.INCIDENCIA) {
             throw new BusinessException("Solo se pueden reintentar pedidos fallidos o con incidencia");
         }
 
-        log.info("Reiniciando delivery para orden {} por solicitud de empresa/admin", delivery.getOrden().getId());
+        log.info("Reiniciando delivery para orden {} por solicitud del usuario {}",
+            delivery.getOrden().getId(), usuarioId);
 
         delivery.setEstado(DeliveryStatus.BUSCANDO_REPARTIDOR);
         delivery.setRepartidor(null);
@@ -560,11 +637,66 @@ public class DeliveryService {
     }
 
     private String generarYGuardarOTP(Delivery delivery) {
-        String codigo = String.format("%04d", new SecureRandom().nextInt(10000));
-        delivery.setCodigoConfirmacion(passwordEncoder.encode(codigo));
-        delivery.setCodigoExpiraAt(Instant.now().plus(OTP_EXPIRACION_HORAS, ChronoUnit.HOURS));
-        deliveryRepository.save(delivery);
-        return codigo;
+        SecureRandom random = new SecureRandom();
+        for (int intento = 0; intento < 20; intento++) {
+            String codigo = String.valueOf(100000 + random.nextInt(900000));
+            String fingerprint = fingerprintOTP(codigo);
+            int reservado = jdbcTemplate.update(
+                "INSERT INTO delivery_otp_history (otp_fingerprint, delivery_id) VALUES (?, ?) " +
+                    "ON CONFLICT (otp_fingerprint) DO NOTHING",
+                fingerprint, delivery.getId()
+            );
+            if (reservado == 1) {
+                delivery.setCodigoConfirmacion(passwordEncoder.encode(codigo));
+                delivery.setCodigoExpiraAt(Instant.now().plus(OTP_EXPIRACION_HORAS, ChronoUnit.HOURS));
+                deliveryRepository.save(delivery);
+                return codigo;
+            }
+            log.debug("PIN ya utilizado; generando otro para delivery {}", delivery.getId());
+        }
+        throw new BusinessException("No se pudo generar un PIN único. Intenta nuevamente");
+    }
+
+    @Transactional(readOnly = true)
+    public List<DeliveryEmpresaResponseDTO> getSeguimientoEmpresa(Long usuarioId) {
+        Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada para el usuario autenticado"));
+        return deliveryRepository.findSeguimientoByEmpresaId(empresa.getId()).stream()
+            .map(deliveryMapper::toEmpresaResponseDTO)
+            .toList();
+    }
+
+    /** Confirma que la empresa revisó una entrega finalizada y cierra su seguimiento GPS. */
+    @Transactional
+    public DeliveryEmpresaResponseDTO confirmarEntregaEmpresa(Long deliveryId, Long usuarioId) {
+        Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada para el usuario autenticado"));
+        Delivery delivery = deliveryRepository.findByIdForUpdate(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+        if (delivery.getOrden() == null || delivery.getOrden().getEmpresa() == null
+                || !delivery.getOrden().getEmpresa().getId().equals(empresa.getId())) {
+            throw new BusinessException("No autorizado para confirmar este delivery");
+        }
+        if (delivery.getEstado() != DeliveryStatus.ENTREGADO) {
+            throw new BusinessException("Solo se puede confirmar un pedido que ya fue entregado al cliente");
+        }
+
+        if (delivery.getEmpresaConfirmadoAt() == null) {
+            delivery.setEmpresaConfirmadoAt(Instant.now());
+            delivery = deliveryRepository.save(delivery);
+        }
+        return deliveryMapper.toEmpresaResponseDTO(delivery);
+    }
+
+    private String fingerprintOTP(String codigo) {
+        try {
+            return HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(codigo.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            );
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 no está disponible", e);
+        }
     }
 
     private void marcarTimestamp(Delivery delivery, DeliveryStatus estado) {

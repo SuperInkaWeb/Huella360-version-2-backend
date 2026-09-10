@@ -89,6 +89,10 @@ public class Delivery {
     @Column(name = "entregado_at")
     private Instant entregadoAt;
 
+    /** Momento en que la empresa revisó la entrega y cerró su seguimiento GPS. */
+    @Column(name = "empresa_confirmado_at")
+    private Instant empresaConfirmadoAt;
+
     // ---- OTP (hash BCrypt, nunca plano) ----
     @Column(name = "codigo_confirmacion")
     private String codigoConfirmacion;

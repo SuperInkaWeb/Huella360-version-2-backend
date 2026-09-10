@@ -2,6 +2,9 @@ package com.vet_saas.modules.delivery.repository;
 
 import com.vet_saas.modules.delivery.model.Delivery;
 import com.vet_saas.modules.delivery.model.DeliveryStatus;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,8 +17,18 @@ import java.util.Optional;
 @Repository
 public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
+    /**
+     * Bloquea la fila del delivery hasta que finalice la transacción actual.
+     * Se usa al aceptar un pedido del pool para impedir que dos repartidores
+     * puedan asignarse el mismo pedido.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Delivery d WHERE d.id = :deliveryId")
+    Optional<Delivery> findByIdForUpdate(@Param("deliveryId") Long deliveryId);
+
     List<Delivery> findByEstado(DeliveryStatus estado);
 
+    @EntityGraph(attributePaths = {"orden", "orden.empresa", "orden.usuarioCliente", "repartidor"})
     @Query("SELECT d FROM Delivery d WHERE d.orden.id = :ordenId")
     Optional<Delivery> findByOrdenId(@Param("ordenId") Long ordenId);
 
@@ -71,4 +84,10 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     ORDER BY d.entregadoAt DESC
     """)
     List<Delivery> findRatingsByEmpresa(@Param("empresaId") Long empresaId);
+
+    @EntityGraph(attributePaths = {
+        "orden", "orden.usuarioCliente", "orden.detalles", "orden.detalles.producto", "repartidor"
+    })
+    @Query("SELECT DISTINCT d FROM Delivery d WHERE d.orden.empresa.id = :empresaId ORDER BY d.createdAt DESC")
+    List<Delivery> findSeguimientoByEmpresaId(@Param("empresaId") Long empresaId);
 }

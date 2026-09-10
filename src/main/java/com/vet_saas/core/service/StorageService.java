@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -62,16 +61,12 @@ public class StorageService {
             String fileName = UUID.randomUUID().toString();
             String finalFolder = "vet-saas/" + (folderName.startsWith("/") ? folderName.substring(1) : folderName);
 
-            // Usar InputStream en vez de byte[] para reducir uso de memoria
-            // Cloudinary soporta upload con InputStream directamente
-            Map uploadResult;
-            try (InputStream inputStream = file.getInputStream()) {
-                uploadResult = cloudinary.uploader().upload(inputStream,
-                        ObjectUtils.asMap(
-                                "folder", finalFolder,
-                                "public_id", fileName,
-                                "resource_type", "auto"));
-            }
+            // cloudinary-http5 2.x acepta byte[] para cargas multipart, no InputStream.
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", finalFolder,
+                            "public_id", fileName,
+                            "resource_type", "auto"));
 
             if (uploadResult == null || !uploadResult.containsKey("secure_url")) {
                 throw new BusinessException("Cloudinary no devolvio una URL valida");
