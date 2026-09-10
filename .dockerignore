@@ -1,0 +1,18 @@
+# Ignorar carpetas de compilación locales
+target/
+out/
+build/
+
+# Ignorar archivos de IDE
+.idea/
+.vscode/
+*.iml
+
+# Ignorar variables de entorno locales (¡Muy importante por seguridad!)
+.env
+*.env
+
+# Ignorar archivos de git y otros
+.git/
+.gitignore
+.dockerignore

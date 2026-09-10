@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Verifica tu correo - VetSaaS</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e1e8ed;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+        }
+
+        .content {
+            padding: 20px 0;
+            color: #34495e;
+            line-height: 1.6;
+            text-align: center;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #95a5a6;
+            padding-top: 20px;
+            border-top: 1px solid #e1e8ed;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin-top: 20px;
+            background-color: #10b981;
+            color: white !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background-color: #059669;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Huella360 🐾</h1>
+        </div>
+
+        <div class="content">
+            <h2>¡Casi terminamos!</h2>
+            <p>Hola <strong th:text="${nombreUsuario}">[Nombre Usuario]</strong>,</p>
+
+            <p>Gracias por registrarte en VetSaaS. Para completar tu registro y activar tu cuenta, por favor verifica tu
+                dirección de correo electrónico haciendo clic en el botón de abajo:</p>
+
+            <div style="margin: 30px 0;">
+                <a th:href="${verificationUrl}" class="btn">Verificar mi cuenta</a>
+            </div>
+
+            <p>¡Esperamos verte pronto en la plataforma!</p>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2026 Huella360. Todos los derechos reservados.</p>
+            <p>Este es un correo automático, por favor no lo respondas.</p>
+        </div>
+    </div>
+</body>
+
+</html>

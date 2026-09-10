@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Nueva Suscripción al Newsletter - Huella360</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e1e8ed;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+        }
+
+        .content {
+            padding: 20px 0;
+            color: #34495e;
+            line-height: 1.6;
+        }
+
+        .badge {
+            display: inline-block;
+            background-color: #1ea59c;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #95a5a6;
+            padding-top: 20px;
+            border-top: 1px solid #e1e8ed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Nueva Suscripción al Newsletter</h1>
+        </div>
+
+        <div class="content">
+            <p><span class="badge">NUEVA SUSCRIPCIÓN</span></p>
+
+            <p>Se ha registrado una nueva suscripción al newsletter de Huella360:</p>
+
+            <p><strong>Correo electrónico:</strong> <span th:text="${subscriberEmail}">[correo]</span></p>
+            <p><strong>Fecha:</strong> <span th:text="${subscriptionDate}">[fecha]</span></p>
+        </div>
+
+        <div class="footer">
+            <p>Este es un correo automático de notificación del sistema.</p>
+        </div>
+    </div>
+</body>
+
+</html>

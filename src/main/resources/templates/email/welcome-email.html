@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Bienvenido a VetSaaS</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e1e8ed;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+        }
+
+        .content {
+            padding: 20px 0;
+            color: #34495e;
+            line-height: 1.6;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #95a5a6;
+            padding-top: 20px;
+            border-top: 1px solid #e1e8ed;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-top: 20px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        .btn:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>¡Bienvenido a Huella360! 🐾</h1>
+        </div>
+
+        <div class="content">
+            <p>Hola <strong th:text="${nombreUsuario}">[Nombre Usuario]</strong>,</p>
+
+            <p>Nos alegra mucho que te hayas unido a VetSaaS, la plataforma diseñada para conectar a cuidadores de
+                mascotas con los mejores servicios veterinarios.</p>
+
+            <p>A partir de ahora, podrás:</p>
+            <ul>
+                <li>Agendar consultas médicas para tus engreídos.</li>
+                <li>Comprar productos especializados en nuestras clínicas asociadas.</li>
+                <li>Hacer seguimiento de su historial de salud.</li>
+            </ul>
+
+            <p>Si tienes alguna duda, no dudes en contactarnos. ¡Estamos aquí para ayudarte!</p>
+
+            <div style="text-align: center;">
+                <a href="#" class="btn">Ir a mi Panel</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2026 Huella360. Todos los derechos reservados.</p>
+            <p>Este es un correo automático, por favor no lo respondas.</p>
+        </div>
+    </div>
+</body>
+
+</html>
