@@ -1,13 +1,14 @@
 package com.vet_saas.security.config;
 
 import com.vet_saas.config.AppProperties;
+import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.security.jwt.Auth0JwtAuthenticationConverter;
 import com.vet_saas.security.jwt.Auth0JwtDecoder;
-import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Arrays;
 import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,36 +43,197 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtEntryPoint))
+
+                .cors(cors ->
+                        cors.configurationSource(corsConfigurationSource())
+                )
+
+                .exceptionHandling(exception ->
+                        exception.authenticationEntryPoint(jwtEntryPoint)
+                )
+
                 .authorizeHttpRequests(req -> req
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/sync").authenticated()
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/public/**").permitAll()
-                        .requestMatchers("/api/v1/users/exists/**").permitAll()
-                        .requestMatchers("/api/v1/companies/public/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/adoptions/public/**").permitAll()
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/categories", "/api/v1/categories/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/adoptions/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/adoptions/applications/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/adoptions", "/api/v1/adoptions/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/services/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/services", "/api/v1/services/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/appointments/available-slots").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/subscriptions/plans").permitAll()
-                        .requestMatchers("/api/v1/payments/webhook/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/newsletter/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/contacto").permitAll()
-                        .requestMatchers("/api/v1/ws/**").authenticated()
-                        .requestMatchers("/payment/**").permitAll()
-                        .requestMatchers("/error").permitAll()
-                        .anyRequest().authenticated())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                        // =====================================================
+                        // AUTH
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/auth/sync"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                "/api/v1/auth/**"
+                        ).permitAll()
+
+                        // =====================================================
+                        // PUBLIC
+                        // =====================================================
+
+                        .requestMatchers(
+                                "/api/v1/public/**"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                "/api/v1/users/exists/**"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                "/api/v1/companies/public/**"
+                        ).permitAll()
+
+                        // =====================================================
+                        // ADOPTIONS
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/adoptions/public/**"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/adoptions/me"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/adoptions/applications/me"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/adoptions",
+                                "/api/v1/adoptions/**"
+                        ).permitAll()
+
+                        // =====================================================
+                        // ADMIN
+                        // =====================================================
+
+                        .requestMatchers(
+                                "/api/v1/admin/**"
+                        ).hasRole("ADMIN")
+
+                        // =====================================================
+                        // CATEGORIES
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/categories",
+                                "/api/v1/categories/**"
+                        ).permitAll()
+
+                        // =====================================================
+                        // SERVICES
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/services/me"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/services",
+                                "/api/v1/services/**"
+                        ).permitAll()
+
+                        // =====================================================
+                        // APPOINTMENTS
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/appointments/available-slots"
+                        ).permitAll()
+
+                        // =====================================================
+                        // SUBSCRIPTIONS
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/subscriptions/plans"
+                        ).permitAll()
+
+                        // =====================================================
+                        // PAYMENTS
+                        // =====================================================
+
+                        .requestMatchers(
+                                "/api/v1/payments/webhook/**"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                "/payment/**"
+                        ).permitAll()
+
+                        // =====================================================
+                        // NEWSLETTER
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/newsletter/**"
+                        ).permitAll()
+
+                        // =====================================================
+                        // CONTACT
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/contacto"
+                        ).permitAll()
+
+                        // =====================================================
+                        // WEBSOCKET
+                        // =====================================================
+
+                        .requestMatchers(
+                                "/api/v1/ws/**"
+                        ).authenticated()
+
+                        // =====================================================
+                        // SPRING ERROR
+                        // =====================================================
+
+                        .requestMatchers(
+                                "/error"
+                        ).permitAll()
+
+                        // =====================================================
+                        // ACTUATOR
+                        // =====================================================
+
+                        .requestMatchers(
+                                "/actuator/health",
+                                "/actuator/info"
+                        ).permitAll()
+
+                        // =====================================================
+                        // RESTO
+                        // =====================================================
+
+                        .anyRequest()
+                        .authenticated()
+                )
+
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
+
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt
                                 .decoder(auth0JwtDecoder())
-                                .jwtAuthenticationConverter(auth0JwtAuthenticationConverter())
+                                .jwtAuthenticationConverter(
+                                        auth0JwtAuthenticationConverter()
+                                )
                         )
                         .authenticationEntryPoint(jwtEntryPoint)
                 );
@@ -81,39 +243,88 @@ public class SecurityConfig {
 
     @Bean
     public JwtDecoder auth0JwtDecoder() {
-        return new Auth0JwtDecoder(auth0IssuerUri, jwtSecret);
+        return new Auth0JwtDecoder(
+                auth0IssuerUri,
+                appProperties.getAuth0().getAudience(),
+                jwtSecret
+        );
     }
 
     @Bean
     public Auth0JwtAuthenticationConverter auth0JwtAuthenticationConverter() {
-        return new Auth0JwtAuthenticationConverter(usuarioRepository);
+        return new Auth0JwtAuthenticationConverter(
+                usuarioRepository
+        );
     }
 
     @Bean
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
 
-        List<String> origins = appProperties.getCors().getAllowedOrigins();
+        CorsConfiguration configuration =
+                new CorsConfiguration();
+
+        List<String> origins =
+                appProperties
+                        .getCors()
+                        .getAllowedOrigins();
+
         if (origins != null && !origins.isEmpty()) {
-            // Validate: allowCredentials(true) + "*" origin is not allowed by browsers
-            boolean hasWildcard = origins.contains("*");
+
+            boolean hasWildcard =
+                    origins.contains("*");
+
             if (hasWildcard) {
                 throw new IllegalStateException(
-                        "CORS misconfiguration: allowedOrigins contains '*' with allowCredentials(true). "
-                        + "Either remove '*' or set allowCredentials(false).");
+                        "CORS misconfiguration: allowedOrigins contains '*' "
+                                + "with allowCredentials(true). "
+                                + "Either remove '*' or set allowCredentials(false)."
+                );
             }
-            configuration.setAllowedOrigins(origins);
+
+            configuration.setAllowedOrigins(
+                    origins
+            );
+
         } else {
-            configuration.addAllowedOrigin("http://localhost:5173");
+
+            configuration.addAllowedOrigin(
+                    "http://localhost:5173"
+            );
         }
 
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        configuration.setAllowedMethods(
+                Arrays.asList(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"
+                )
+        );
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        configuration.setAllowedHeaders(
+                Arrays.asList(
+                        "Authorization",
+                        "Content-Type",
+                        "X-Requested-With"
+                )
+        );
+
+        configuration.setAllowCredentials(true);
+
+        configuration.setMaxAge(
+                3600L
+        );
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration(
+                "/**",
+                configuration
+        );
+
         return source;
     }
 }

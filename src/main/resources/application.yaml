@@ -43,11 +43,11 @@ spring:
       max-request-size: 10MB
 
   mail:
-    host: ${MAIL_HOST}
-    port: ${MAIL_PORT}
-    username: ${MAIL_USERNAME}
-    from-email: ${MAIL_FROM}
-    password: ${MAIL_PASSWORD}
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    from-email: ${MAIL_FROM:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -58,6 +58,8 @@ spring:
 management:
   health:
     db:
+      enabled: false
+    mail:
       enabled: false
   endpoints:
     web:
@@ -94,7 +96,7 @@ app:
     frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
     api-peru:
       base-url: https://dniruc.apisperu.com/api/v1
-      token: ${API_PERU_TOKEN}
+      token: ${API_PERU_TOKEN:}
 
     cloudinary:
       cloud-name: ${CLOUDINARY_CLOUD_NAME}
@@ -102,15 +104,15 @@ app:
       api-secret: ${CLOUDINARY_API_SECRET}
 
     mercadopago:
-      access-token: ${MP_ACCESS_TOKEN}
-      client-id: ${MP_CLIENT_ID}
-      client-secret: ${MP_CLIENT_SECRET}
-      sandbox-buyer-email: ${MP_SANDBOX_BUYER_EMAIL}
+      access-token: ${MP_ACCESS_TOKEN:}
+      client-id: ${MP_CLIENT_ID:}
+      client-secret: ${MP_CLIENT_SECRET:}
+      sandbox-buyer-email: ${MP_SANDBOX_BUYER_EMAIL:}
       sandbox: ${MP_SANDBOX:true}
       webhook-secret: ${MP_WEBHOOK_SECRET:}
 
     mail:
-      username: ${MAIL_USERNAME}
+      username: ${MAIL_USERNAME:}
 
     resend:
       api-key: ${RESEND_API_KEY}

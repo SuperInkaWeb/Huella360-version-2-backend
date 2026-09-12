@@ -7,6 +7,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 
 @Configuration
 @RequiredArgsConstructor
@@ -16,7 +17,14 @@ public class MyMercadoPagoConfig {
 
     @PostConstruct
     public void init() {
-        MercadoPagoConfig.setAccessToken(appProperties.getExternal().getMercadoPago().getAccessToken());
+        String accessToken = appProperties
+                .getExternal()
+                .getMercadoPago()
+                .getAccessToken();
+
+        if (StringUtils.hasText(accessToken)) {
+            MercadoPagoConfig.setAccessToken(accessToken);
+        }
     }
 
     @Bean
