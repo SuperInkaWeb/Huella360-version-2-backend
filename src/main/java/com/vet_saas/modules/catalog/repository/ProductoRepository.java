@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -37,11 +38,12 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
         Optional<Producto> findByIdAndEstadoAndVisibleTrueAndActivoTrue(Long id, EstadoProducto estado);
 
         // Queries para Marketplace (públicos)
+        // Una categoría padre incluye los productos de sus subcategorías (c.padre.id).
         @Query("SELECT p FROM Producto p " +
                         "JOIN FETCH p.empresa " +
-                        "LEFT JOIN FETCH p.categoria " +
+                        "LEFT JOIN FETCH p.categoria c " +
                         "WHERE p.estado = :estado AND p.visible = true AND p.activo = true " +
-                        "AND (CAST(:categoriaId AS long) IS NULL OR p.categoria.id = :categoriaId) " +
+                        "AND (CAST(:categoriaId AS long) IS NULL OR c.id = :categoriaId OR c.padre.id = :categoriaId) " +
                         "AND (CAST(:q AS string) IS NULL OR :q = '' OR " +
                         "     LOWER(p.nombre) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')) OR " +
                         "     LOWER(p.descripcion) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))")
@@ -50,6 +52,14 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
                         @Param("estado") EstadoProducto estado,
                         @Param("categoriaId") Long categoriaId,
                         Pageable pageable);
+
+        // Conteo de productos públicos por categoría (mismos criterios que findMarketplaceProducts)
+        @Query("SELECT p.categoria.id AS categoriaId, COUNT(p) AS total FROM Producto p " +
+                        "JOIN p.empresa " +
+                        "WHERE p.estado = :estado AND p.visible = true AND p.activo = true " +
+                        "AND p.categoria IS NOT NULL " +
+                        "GROUP BY p.categoria.id")
+        List<CategoriaProductCount> countPublicProductsByCategoria(@Param("estado") EstadoProducto estado);
 
         // Nuevo método dedicado para perfiles públicos de empresa
         Page<Producto> findByEmpresaIdAndEstadoAndVisibleTrueAndActivoTrue(
