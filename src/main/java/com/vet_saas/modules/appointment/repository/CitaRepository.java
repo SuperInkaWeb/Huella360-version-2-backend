@@ -35,6 +35,8 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 
     boolean existsByVeterinarioIdAndMascotaId(Long veterinarioId, Long mascotaId);
 
+    boolean existsByEmpresaIdAndMascotaId(Long empresaId, Long mascotaId);
+
     @Query("SELECT COUNT(c) > 0 FROM Cita c WHERE c.veterinario.id = :veterinarioId " +
             "AND c.fechaProgramada = :fecha " +
             "AND c.estado <> 'CANCELADA' " +
