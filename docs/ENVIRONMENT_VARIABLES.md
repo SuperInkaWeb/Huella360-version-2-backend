@@ -88,10 +88,18 @@ Este documento lista todas las variables de entorno necesarias para configurar y
 | `VITE_API_URL` | Base URL del backend (`/api/v1`) |
 | `VITE_WS_URL` | Base URL del WebSocket (STOMP/SockJS) |
 | `VITE_SENTRY_DSN` | DSN de Sentry (opcional) |
-| `VITE_AUTH0_DOMAIN` | Dominio del tenant Auth0 (no bloquea V1) |
-| `VITE_AUTH0_CLIENT_ID` | Client ID de Auth0 (no bloquea V1) |
-| `VITE_AUTH0_AUDIENCE` | Audience de Auth0 (no bloquea V1) |
+| `VITE_AUTH0_DOMAIN` | Dominio del tenant Auth0 — **es el único método de login del frontend**, ver nota abajo |
+| `VITE_AUTH0_CLIENT_ID` | Client ID de Auth0 |
+| `VITE_AUTH0_AUDIENCE` | Audience de Auth0 (debe coincidir con el Identifier de la API creada en el dashboard) |
 | `VITE_MP_PUBLIC_KEY` / `VITE_MP_CLIENT_ID` | Presentes en `.env.example` pero sin referencias en el código fuente actual (`grep` no encontró usos) — la Public Key de MercadoPago parece venir del backend por empresa, no de una variable de build. Pendiente de limpiar o confirmar uso real. |
+
+> [!IMPORTANT]
+> **Actualización 2026-09-22**: se determinó que **el frontend no tiene ningún formulario propio de correo/contraseña**
+> (`Login.tsx`/`Register.tsx` solo tienen el botón de Auth0) — el login por API que sí funciona en el backend está
+> huérfano en la UI. Por eso Auth0 dejó de ser "no bloquea V1, diferido a V2": **es el único método de login que existe
+> hoy en el producto**. Se creó y validó un tenant de desarrollo propio de Huella360 (`dev-axull8vzu88qqbmq.us.auth0.com`,
+> reemplazando el tenant compartido `formex-payment.us.auth0.com` que usa producción). Flujo completo documentado en
+> [`AUTH0_FLOW.md`](./AUTH0_FLOW.md).
 
 ## 📋 Estado por entorno (DEV/QA → PRODUCCIÓN)
 
@@ -104,7 +112,7 @@ Formato acordado: `VARIABLE | SERVICIO | DEV/QA | PRODUCCIÓN | OBLIGATORIA | FU
 | `APP_ENCRYPTION_SECRET` | Auth interno | Configurada DEV | Pendiente PROD (rotar) | Sí | Cifrado de credenciales MP por empresa |
 | `ALLOWED_ORIGINS` | CORS | Configurada (localhost:5173) | Pendiente (dominio real) | Sí | Origenes permitidos |
 | `APP_PUBLIC_URL` / `APP_BACKEND_URL` / `APP_FRONTEND_URL` | Config interna | Configurada (localhost) | Pendiente (dominios reales) | Sí | URLs base / callbacks |
-| `AUTH0_ISSUER_URI` / `AUTH0_AUDIENCE` | Auth0 | Placeholder, no usado | Pendiente | No para V1 (login social, diferido a V2) | OAuth2 social login |
+| `AUTH0_ISSUER_URI` / `AUTH0_AUDIENCE` | Auth0 | Configurada DEV (tenant propio `dev-axull8vzu88qqbmq`, validado de punta a punta) | Pendiente (sigue en `formex-payment`, migración pendiente de aprobar) | **Sí — es el único método de login del producto** | Autenticación (login/registro) |
 | `MP_ACCESS_TOKEN` / `MP_CLIENT_ID` / `MP_CLIENT_SECRET` / `MP_WEBHOOK_SECRET` | Mercado Pago | Pendiente crear sandbox | Pendiente PROD | No para V1 (cobro real); sí para validar flujo en sandbox | Pagos/suscripciones |
 | `MP_SANDBOX` | Mercado Pago | `true` (default del código) | `false` en PROD | Sí | Evita cobros reales en dev/QA |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Cloudinary | Pendiente crear cuenta dev | Pendiente PROD | Sí | Imágenes (logos, productos, servicios) |
@@ -118,7 +126,7 @@ Formato acordado: `VARIABLE | SERVICIO | DEV/QA | PRODUCCIÓN | OBLIGATORIA | FU
 | `WS_CLIENT_LOGIN` / `WS_CLIENT_PASSCODE` / `WS_SYSTEM_LOGIN` / `WS_SYSTEM_PASSCODE` | Broker STOMP interno | `guest` (default) | Rotar en PROD | No para V1 | Credenciales del broker WebSocket |
 | `VITE_API_URL` / `VITE_WS_URL` | Frontend → Backend | Configurada (localhost) | Pendiente (dominios reales) | Sí | Frontend apunta al backend correcto |
 | `VITE_SENTRY_DSN` | Sentry | Vacía (opcional) | Pendiente PROD | No | Monitoreo de errores frontend |
-| `VITE_AUTH0_DOMAIN` / `VITE_AUTH0_CLIENT_ID` / `VITE_AUTH0_AUDIENCE` | Auth0 | Placeholder, no usado | Pendiente | No para V1 | Login social (V2) |
+| `VITE_AUTH0_DOMAIN` / `VITE_AUTH0_CLIENT_ID` / `VITE_AUTH0_AUDIENCE` | Auth0 | Configurada DEV (mismo tenant propio) | Pendiente (sigue en `formex-payment`) | **Sí — único método de login** | Autenticación (login/registro) |
 
 ---
 
