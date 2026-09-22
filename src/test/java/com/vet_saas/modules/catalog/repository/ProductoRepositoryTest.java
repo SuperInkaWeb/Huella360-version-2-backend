@@ -9,6 +9,7 @@ import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,6 +79,16 @@ class ProductoRepositoryTest extends AbstractIntegrationTest {
                 .activo(true)
                 .orden(0)
                 .build());
+    }
+
+    @AfterEach
+    void tearDown() {
+        // AbstractIntegrationTest comparte un unico Testcontainers de Postgres entre TODAS las
+        // clases de test (el campo `postgres` es static en la clase base). Sin este cleanup, el
+        // Usuario/Empresa creados aqui sobreviven a esta clase y rompen el usuarioRepository.deleteAll()
+        // de otras clases (CompanyControllerTest, OrderControllerTest, AuthorizationTest) por la FK
+        // empresas_usuario_propietario_id_fkey.
+        limpiarDatos();
     }
 
     private void limpiarDatos() {
