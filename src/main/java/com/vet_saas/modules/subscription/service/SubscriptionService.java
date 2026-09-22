@@ -229,6 +229,7 @@ public class SubscriptionService {
                         Plan newPlan = planRepository.findById(planId)
                                         .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
                                                         "Plan no encontrado con ID: " + planId));
+                        rejectIfPlanEsPago(newPlan);
                         sub.setPlan(newPlan);
                         return SuscripcionResponseDto.fromEntity(suscripcionRepository.save(sub));
                 } else {
@@ -278,11 +279,28 @@ public class SubscriptionService {
                 Plan newPlan = planRepository.findById(planId)
                                 .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
                                                 "Plan no encontrado con ID: " + planId));
+                rejectIfPlanEsPago(newPlan);
 
                 suscripcion.setPlan(newPlan);
                 suscripcion.setUpdatedAt(LocalDateTime.now());
 
                 return SuscripcionResponseDto.fromEntity(suscripcionRepository.save(suscripcion));
+        }
+
+        /**
+         * H360-SEC: update-plan es el "cambio directo" para planes GRATUITOS unicamente.
+         * Un plan pago solo puede activarse via /subscriptions/checkout/{planId} -> Mercado
+         * Pago -> webhook -> handleSubscriptionWebhook, que es el unico camino que confirma
+         * el pago antes de activar el plan. Sin este chequeo, cualquier CLIENTE/EMPRESA/
+         * VETERINARIO autenticado podia llamar update-plan directamente y quedar en un plan
+         * pago (con todos sus limites) sin pagar nada.
+         */
+        private void rejectIfPlanEsPago(Plan plan) {
+                if (plan.getPrecioMensual() != null && plan.getPrecioMensual().compareTo(BigDecimal.ZERO) > 0) {
+                        throw new com.vet_saas.core.exceptions.types.BusinessException(
+                                        "El plan '" + plan.getNombre()
+                                                        + "' es de pago. Usa el flujo de checkout para suscribirte.");
+                }
         }
 
         /**
