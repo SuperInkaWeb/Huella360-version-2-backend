@@ -15,6 +15,7 @@ import com.vet_saas.modules.subscription.repository.PlanRepository;
 import com.vet_saas.modules.subscription.repository.SuscripcionRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -132,5 +133,25 @@ class SubscriptionServiceTest {
 
         assertNotNull(response);
         verify(suscripcionRepository).save(any());
+    }
+
+    @Test
+    void updatePlanForUsuario_veterinario_rechazaPlanDePago() {
+        // H360-SEC: pedido explicito de @Alexnarea en la revision del PR - updatePlanForOwner()
+        // ya se comparte entre EMPRESA y VETERINARIO (mismo metodo), pero se deja el tercer rol
+        // afectado protegido explicitamente en CI en vez de asumirlo por la cobertura de EMPRESA.
+        Usuario usuarioVet = Usuario.builder().id(3L).correo("vet@test.com").rol(Role.VETERINARIO).build();
+        Veterinario veterinario = Veterinario.builder().id(6L).build();
+        Suscripcion subActual = Suscripcion.builder().id(12L).veterinario(veterinario).plan(planGratuito)
+                        .estado(EstadoSuscripcion.ACTIVA).build();
+
+        when(veterinarioRepository.findByUsuarioId(3L)).thenReturn(Optional.of(veterinario));
+        when(suscripcionRepository.findByVeterinarioId(6L)).thenReturn(Optional.of(subActual));
+        when(planRepository.findById(8L)).thenReturn(Optional.of(planPago));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                        () -> subscriptionService.updatePlanForUsuario(usuarioVet, 8L));
+        assertTrue(ex.getMessage().contains("pago"));
+        verify(suscripcionRepository, never()).save(any());
     }
 }
