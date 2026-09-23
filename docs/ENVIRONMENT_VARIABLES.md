@@ -43,13 +43,18 @@ Este documento lista todas las variables de entorno necesarias para configurar y
 
 ## 💳 Mercado Pago (Pagos)
 
-| Variable | Descripción | Valor Ejemplo |
+Estas variables son a **nivel plataforma**: alimentan el SDK global de Mercado Pago (`MyMercadoPagoConfig`) y el flujo de **suscripciones** de Huella360 (`SubscriptionService`), donde el cobro lo recibe la propia plataforma, no una empresa individual.
+
+| Variable | Descripción | Valor Ejemplo (sandbox) |
 | :--- | :--- | :--- |
-| `MP_ACCESS_TOKEN` | Access Token de Mercado Pago | `APP_USR-xxxxxx...` |
-| `MP_CLIENT_ID` | Client ID de la aplicación | `123456789` |
-| `MP_CLIENT_SECRET` | Client Secret de la aplicación | `xxxxxxxxxxxxxxxx` |
-| `MP_SANDBOX` | Activar modo sandbox | `true` |
-| `MP_SANDBOX_BUYER_EMAIL` | Email para pruebas en sandbox | `test_user_123@testuser.com` |
+| `MP_ACCESS_TOKEN` | Access Token de la app de Mercado Pago. En modo prueba empieza con `TEST-` | `TEST-xxxxxxxx-xxxxxx-xxxxxxxxxxxxxxxx-xxxxxxxxx` |
+| `MP_CLIENT_ID` | Client ID de la app OAuth — permite que cada Empresa conecte su propia cuenta MP desde su panel | `123456789` |
+| `MP_CLIENT_SECRET` | Client Secret de la misma app OAuth | `xxxxxxxxxxxxxxxx` |
+| `MP_SANDBOX` | Activa modo sandbox (`true`/`false`); actualmente `true` por defecto en `application.yaml` | `true` |
+| `MP_SANDBOX_BUYER_EMAIL` | Cuenta de comprador de prueba para simular pagos en sandbox | `test_user_123@testuser.com` |
+| `MP_WEBHOOK_SECRET` | Valida la firma de las notificaciones webhook entrantes de Mercado Pago | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+
+**Importante — credenciales por empresa (NO son variables de entorno):** cada Empresa que vende en el marketplace conecta su **propia** cuenta de Mercado Pago vía OAuth desde su panel (usando `MP_CLIENT_ID`/`MP_CLIENT_SECRET` de arriba para la negociación). El resultado (`access_token`, `public_key`) se guarda por empresa en la tabla `empresas` (`mpAccessToken` cifrado con `CryptoUtil`, `mpPublicKey` en claro), nunca en `.env`. No existe una variable `MP_PUBLIC_KEY` a nivel plataforma en el código actual: el checkout de suscripciones usa Checkout Pro (redirección con `init_point`), que no requiere Public Key en el frontend; el marketplace sí expone el `mpPublicKey` de cada empresa vía API para detectar si sus credenciales están en modo sandbox (prefijo `TEST-`).
 
 ## 🤖 IA (Groq / OpenAI)
 
