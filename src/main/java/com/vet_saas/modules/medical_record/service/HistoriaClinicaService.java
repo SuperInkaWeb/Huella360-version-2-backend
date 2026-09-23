@@ -91,8 +91,11 @@ public class HistoriaClinicaService {
     public boolean hasEmpresaAccessToPet(Long usuarioId, Long mascotaId) {
         Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuarioId).orElse(null);
         if (empresa == null) return false;
-        return mascotaRepository.findById(mascotaId)
-                .map(m -> m.getUsuario() != null && m.getUsuario().getId().equals(usuarioId))
-                .orElse(false);
+        // H360-SEC: antes comparaba el id del dueno de la empresa contra el id del
+        // dueno de la mascota, algo que nunca coincide (son cuentas distintas) --
+        // una empresa jamas podia ver el historial de ningun paciente, ni de los que
+        // si atendio. El chequeo correcto es el mismo patron que hasVetAccessToPet:
+        // la empresa tuvo al menos una cita con esa mascota.
+        return citaRepository.existsByEmpresaIdAndMascotaId(empresa.getId(), mascotaId);
     }
 }
