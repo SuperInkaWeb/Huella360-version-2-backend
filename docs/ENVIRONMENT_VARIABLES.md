@@ -64,10 +64,12 @@ Este documento lista todas las variables de entorno necesarias para configurar y
 > **`GROQ_API_KEY` no tiene valor por defecto en `application.yaml`** (`${GROQ_API_KEY}`, sin `:fallback`). Como todas las
 > propiedades bajo el prefijo `app.*` (incluyendo `app.ia.groq-api-key`) se enlazan en un único bean `AppProperties` al
 > arrancar el contexto de Spring, si la variable de entorno no existe **el arranque completo del backend falla**
-> (`PlaceholderResolutionException`), no solo el módulo de IA. Esto no es exclusivo de Groq: `AUTH0_ISSUER_URI`,
-> `AUTH0_AUDIENCE`, `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET`, `RESEND_API_KEY`, `JWT_SECRET` y `APP_ENCRYPTION_SECRET`
-> tienen el mismo patrón (`${VAR}` sin default) y romperían el arranque igual si faltaran — GROQ es solo el que más
-> visiblemente lo hizo porque no estaba documentado en `.env.example` hasta ahora.
+> (`PlaceholderResolutionException`), no solo el módulo de IA. Esto no es exclusivo de Groq: `DB_URL`, `DB_USERNAME`,
+> `DB_PASSWORD`, `JWT_SECRET`, `APP_ENCRYPTION_SECRET`, `AUTH0_ISSUER_URI`, `AUTH0_AUDIENCE`,
+> `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` y `RESEND_API_KEY` tienen el mismo patrón (`${VAR}` sin default) y
+> romperían el arranque igual si faltaran — GROQ es solo el que más visiblemente lo hizo porque no estaba documentado
+> en `.env.example` hasta ahora. La lista completa y su contraparte (las que **sí** tienen default y por tanto no
+> impiden iniciar) está en [Estado por entorno](#-estado-por-entorno-devqa--producción).
 >
 > **Para desacoplar la IA de la disponibilidad del resto de la plataforma** (pedido explícito: que una caída/vencimiento
 > de Groq no tumbe todo Huella360), el cambio de fondo sería darle un default vacío (`${GROQ_API_KEY:}`) y que
@@ -105,28 +107,61 @@ Este documento lista todas las variables de entorno necesarias para configurar y
 
 Formato acordado: `VARIABLE | SERVICIO | DEV/QA | PRODUCCIÓN | OBLIGATORIA | FUNCIÓN`. Sin valores reales, solo estado.
 
+### Qué significa "Obligatoria"
+
+La columna distingue tres niveles, verificados uno por uno contra los placeholders `${...}` de
+`src/main/resources/application.yaml`:
+
+| Nivel | Significado | Cómo se reconoce en `application.yaml` |
+| :--- | :--- | :--- |
+| **Arranque** | Si falta, **el backend no inicia** (`PlaceholderResolutionException` al enlazar `AppProperties`) | `${VAR}` — sin `:` ni valor por defecto |
+| **Funcional** | El backend **sí arranca**, pero la funcionalidad asociada no opera o queda en modo degradado hasta configurarla | `${VAR:}` o `${VAR:valor}` — tiene default |
+| **Opcional** | Tiene default razonable y no requiere tocarse para V1 | `${VAR:valor}` |
+
+**Las 12 variables de nivel "Arranque" son exactamente estas** (únicas sin default en el YAML):
+`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `APP_ENCRYPTION_SECRET`, `AUTH0_ISSUER_URI`,
+`AUTH0_AUDIENCE`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`,
+`RESEND_API_KEY`, `GROQ_API_KEY`. Cualquier otra variable de este documento tiene default y **no**
+impide iniciar el backend.
+
+### Tabla de estado
+
 | Variable | Servicio | DEV/QA | Producción | Obligatoria | Función |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` / `DB_NAME` / `DB_PORT` | PostgreSQL | Configurada (local) | Pendiente (Neon prod) | Sí | Conexión a base de datos |
-| `JWT_SECRET` | Auth interno | Configurada DEV | Pendiente PROD (rotar) | Sí | Firma de JWT propios |
-| `APP_ENCRYPTION_SECRET` | Auth interno | Configurada DEV | Pendiente PROD (rotar) | Sí | Cifrado de credenciales MP por empresa |
-| `ALLOWED_ORIGINS` | CORS | Configurada (localhost:5173) | Pendiente (dominio real) | Sí | Origenes permitidos |
-| `APP_PUBLIC_URL` / `APP_BACKEND_URL` / `APP_FRONTEND_URL` | Config interna | Configurada (localhost) | Pendiente (dominios reales) | Sí | URLs base / callbacks |
-| `AUTH0_ISSUER_URI` / `AUTH0_AUDIENCE` | Auth0 | Configurada DEV (tenant propio `dev-axull8vzu88qqbmq`, validado de punta a punta) | Pendiente (sigue en `formex-payment`, migración pendiente de aprobar) | **Sí — es el único método de login del producto** | Autenticación (login/registro) |
-| `MP_ACCESS_TOKEN` / `MP_CLIENT_ID` / `MP_CLIENT_SECRET` / `MP_WEBHOOK_SECRET` | Mercado Pago | Pendiente crear sandbox | Pendiente PROD | No para V1 (cobro real); sí para validar flujo en sandbox | Pagos/suscripciones |
-| `MP_SANDBOX` | Mercado Pago | `true` (default del código) | `false` en PROD | Sí | Evita cobros reales en dev/QA |
-| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Cloudinary | Pendiente crear cuenta dev | Pendiente PROD | Sí | Imágenes (logos, productos, servicios) |
-| `RESEND_API_KEY` / `RESEND_FROM` | Resend | Pendiente crear cuenta dev | Pendiente PROD | Sí | Emails (recuperación de contraseña, notificaciones) |
-| `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM` | SMTP (MailHog en dev) | Configurada (MailHog local) | Pendiente (o vía Resend SMTP) | Sí | Envío de correo transaccional |
-| `GROQ_API_KEY` / `GROQ_MODEL` | Groq | Pendiente crear key dev | Pendiente PROD | Actualmente sí (bloquea arranque, ver arriba) | Asistente de IA |
-| `OPENAI_API_KEY` / `OPENAI_MODEL` | OpenAI | Vacía (opcional) | Vacía (opcional) | No | Fallback de IA |
-| `API_PERU_TOKEN` | API Perú | Pendiente | Pendiente PROD | Sí (para validar RUC/DNI) | Verificación RUC/DNI |
-| `ADMIN_EMAIL` | Notificaciones internas | Configurada (default) | Pendiente PROD | No | Destinatario de alertas admin |
-| `COMMISSION_PERCENTAGE` / `DEFAULT_COUNTRY` / `DEFAULT_CURRENCY` / `DEFAULT_PLAN_NAME` | Reglas de negocio | Configurada (default) | Revisar antes de PROD | No | Config comercial |
-| `WS_CLIENT_LOGIN` / `WS_CLIENT_PASSCODE` / `WS_SYSTEM_LOGIN` / `WS_SYSTEM_PASSCODE` | Broker STOMP interno | `guest` (default) | Rotar en PROD | No para V1 | Credenciales del broker WebSocket |
-| `VITE_API_URL` / `VITE_WS_URL` | Frontend → Backend | Configurada (localhost) | Pendiente (dominios reales) | Sí | Frontend apunta al backend correcto |
-| `VITE_SENTRY_DSN` | Sentry | Vacía (opcional) | Pendiente PROD | No | Monitoreo de errores frontend |
-| `VITE_AUTH0_DOMAIN` / `VITE_AUTH0_CLIENT_ID` / `VITE_AUTH0_AUDIENCE` | Auth0 | Configurada DEV (mismo tenant propio) | Pendiente (sigue en `formex-payment`) | **Sí — único método de login** | Autenticación (login/registro) |
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | PostgreSQL | Configurada (local) | Pendiente (Neon prod) | **Arranque** | Conexión a base de datos |
+| `DB_NAME` / `DB_PORT` | PostgreSQL | Configurada | Configurada | Opcional — solo las lee `docker-compose.yml` (con default `vet_saas` / `5432`), la app no las usa | Levantar el contenedor de Postgres local |
+| `DB_POOL_MAX` / `DB_POOL_MIN` | HikariCP | Default (`3` / `0`) | Revisar antes de PROD | Opcional | Tamaño del pool de conexiones |
+| `JWT_SECRET` | Auth interno | Configurada DEV | Pendiente PROD (rotar) | **Arranque** | Firma de JWT propios |
+| `JWT_EXPIRATION` / `JWT_REFRESH_EXPIRATION` | Auth interno | Default (1 h / 7 días) | Revisar antes de PROD | Opcional | Vigencia de los tokens |
+| `APP_ENCRYPTION_SECRET` | Auth interno | Configurada DEV | Pendiente PROD (rotar) | **Arranque** | Cifrado de credenciales MP por empresa |
+| `ALLOWED_ORIGINS` | CORS | Default (`http://localhost:5173`) | Pendiente (dominio real) | Funcional — **imprescindible en PROD**: con el default, el navegador bloquea al frontend real por CORS | Orígenes permitidos |
+| `APP_PUBLIC_URL` / `APP_BACKEND_URL` / `APP_FRONTEND_URL` | Config interna | Default (`localhost:8080` / `:5173`) | Pendiente (dominios reales) | Funcional — **imprescindible en PROD**: los callbacks y enlaces de correo apuntarían a `localhost` | URLs base / callbacks |
+| `AUTH0_ISSUER_URI` / `AUTH0_AUDIENCE` | Auth0 | Configurada DEV (tenant propio `dev-axull8vzu88qqbmq`, validado de punta a punta) | Pendiente (sigue en `formex-payment`, migración pendiente de aprobar) | **Arranque** — y además es el único método de login del producto | Autenticación (login/registro) |
+| `MP_ACCESS_TOKEN` / `MP_CLIENT_ID` / `MP_CLIENT_SECRET` / `MP_WEBHOOK_SECRET` / `MP_SANDBOX_BUYER_EMAIL` | Mercado Pago | Pendiente crear sandbox | Pendiente PROD | Funcional — sin ellas el backend arranca pero no se puede generar ninguna preferencia de pago | Pagos/suscripciones |
+| `MP_SANDBOX` | Mercado Pago | Default `true` | **Poner `false` en PROD** | Funcional (default `true`) | Evita cobros reales en dev/QA |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Cloudinary | Configurada (cuenta dev) | Pendiente PROD | **Arranque** | Imágenes (logos, productos, servicios) |
+| `RESEND_API_KEY` | Resend | Configurada (cuenta dev) | Pendiente PROD | **Arranque** | Emails (recuperación de contraseña, notificaciones) |
+| `RESEND_FROM` | Resend | Default (`onboarding@resend.dev`) | Pendiente (dominio verificado) | Funcional — con el default solo se puede enviar a la casilla dueña de la cuenta Resend | Remitente de los correos |
+| `MAIL_HOST` / `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM` | SMTP (MailHog en dev) | Default vacío | Pendiente (o vía Resend SMTP) | Funcional — vacías, el envío SMTP directo queda inactivo; el backend arranca igual | Envío de correo transaccional por SMTP |
+| `MAIL_PORT` | SMTP | Default (`587`) | Revisar según proveedor | Opcional | Puerto SMTP |
+| `GROQ_API_KEY` | Groq | Configurada (key dev) | Pendiente PROD | **Arranque** (ver aviso más arriba: es el caso que más visiblemente rompió el inicio) | Asistente de IA |
+| `GROQ_MODEL` | Groq | Default (`llama-3.3-70b-versatile`) | Revisar antes de PROD | Opcional | Modelo de IA a usar |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | OpenAI | Default vacío / `gpt-4o-mini` | Igual | Funcional (fallback opcional) | Fallback de IA |
+| `API_PERU_TOKEN` | API Perú | Default vacío | Pendiente PROD | Funcional — sin ella la validación de RUC/DNI no responde, pero el backend arranca | Verificación RUC/DNI |
+| `ADMIN_EMAIL` | Notificaciones internas | Default (`hola@huella360.com`) | Pendiente PROD | Opcional | Destinatario de alertas admin |
+| `COMMISSION_PERCENTAGE` / `DEFAULT_COUNTRY` / `DEFAULT_CURRENCY` / `DEFAULT_PLAN_NAME` | Reglas de negocio | Default (`0.05` / `Peru` / `PEN` / `Basico`) | Revisar antes de PROD | Opcional | Config comercial |
+| `WS_CLIENT_LOGIN` / `WS_CLIENT_PASSCODE` / `WS_SYSTEM_LOGIN` / `WS_SYSTEM_PASSCODE` | Broker STOMP interno | Default (`guest`) | Rotar en PROD | Opcional | Credenciales del broker WebSocket |
+
+> [!NOTE]
+> Las variables `VITE_*` viven en el repo del frontend y son **de build** (Vite las inyecta al compilar),
+> así que la clasificación "Arranque/Funcional" del backend no les aplica: si faltan, el bundle compila
+> igual pero queda apuntando a `undefined` en tiempo de ejecución.
+
+| Variable (frontend) | Servicio | DEV/QA | Producción | Necesaria para | Función |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `VITE_API_URL` / `VITE_WS_URL` | Frontend → Backend | Configurada (localhost) | Pendiente (dominios reales) | Que el frontend encuentre al backend | Base URL de API y WebSocket |
+| `VITE_AUTH0_DOMAIN` / `VITE_AUTH0_CLIENT_ID` / `VITE_AUTH0_AUDIENCE` | Auth0 | Configurada DEV (mismo tenant propio) | Pendiente (sigue en `formex-payment`) | Poder iniciar sesión (único método de login) | Autenticación (login/registro) |
+| `VITE_SENTRY_DSN` | Sentry | Vacía (opcional) | Pendiente PROD | Nada — opcional | Monitoreo de errores frontend |
 
 ---
 
