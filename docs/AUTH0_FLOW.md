@@ -100,7 +100,7 @@ Auth0 cierra su propia sesión y redirige de vuelta al origin actual.
 | Allowed Logout URLs | mismos orígenes que arriba |
 | Allowed Web Origins | mismos orígenes que arriba (necesario para `getAccessTokenSilently`) |
 | API (audience) | crear una "API" en Auth0 con un Identifier = el valor que se pondrá en `AUTH0_AUDIENCE`/`VITE_AUTH0_AUDIENCE` (puede ser cualquier URI, no tiene que ser real, ej. `https://api.huella360.com`) |
-| Post-Login Action | **crítico** — debe inyectar los custom claims que el backend espera: `https://vet-saas.com/email` (o el namespace que se decida usar) y `https://vet-saas.com/roles`. Sin esto, el login funciona pero el usuario siempre entra "sin rol" y tiene que elegirlo cada vez. |
+| Post-Login Action | **crítico** — debe inyectar los custom claims que el backend espera: `https://vet-saas.com/email` (o el namespace que se decida usar) y `https://vet-saas.com/roles`. Los custom claims son necesarios para disponer del rol directamente desde Auth0 cuando el usuario aún no tiene uno persistido en Huella360; para usuarios existentes, el rol de la BD es la fuente principal (`Auth0JwtAuthenticationConverter` usa `usuario.getRol()` primero y solo cae a los claims del JWT si es `null`). |
 
 ⚠️ **Inconsistencia encontrada en el código actual**: el `Auth0JwtAuthenticationConverter`
 acepta DOS namespaces distintos para los claims (`https://vet-saas.com/...` y
