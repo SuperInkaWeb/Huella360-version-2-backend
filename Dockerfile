@@ -30,16 +30,26 @@ USER appuser
 
 EXPOSE 8080
 
-# JVM tuning para contenedores con poca memoria (512MB plan Render)
-# - MaxRAMPercentage=50: Usa max 256MB para heap (deja ~256MB para OS, metaspace, stack, etc)
-# - MaxMetaspaceSize=128m: Limita metaspace para evitar crecimiento indefinido
-# - ZGC: Garbage collector de baja latencia y bajo overhead de memoria
-# - TrimNativeHeap: Libera memoria nativa al GC
+# JVM tuning para contenedores con poca memoria (512MB plan Render, free tier)
+# 23-09-2026: el tuning anterior (50% heap + ZGC) seguia siendo OOM-killed por Render
+# justo despues del arranque. ZGC tiene overhead fijo de memoria pensado para heaps
+# grandes con baja latencia, no es el mas eficiente para un heap chico de un solo
+# usuario (prueba QA). Ajustes:
+# - MaxRAMPercentage=35 / InitialRAMPercentage=25: heap mas chico, deja mas margen
+#   para metaspace, stack de threads, buffers directos y memoria nativa (fontconfig/
+#   JasperReports)
+# - MaxMetaspaceSize=96m: igual, mas margen
+# - UseSerialGC: mucho menor overhead fijo que ZGC/G1 para heaps chicos; el costo
+#   (pausas mas largas) es irrelevante para una instancia QA de un solo usuario
+# - Xss256k: stack por thread mas chico (default ~1MB); con el pool de Tomcat
+#   limitado via SERVER_TOMCAT_THREADS_MAX esto reduce bastante la memoria nativa
+#   reservada para stacks
 ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=50.0", \
-    "-XX:InitialRAMPercentage=40.0", \
-    "-XX:MaxMetaspaceSize=128m", \
-    "-XX:+UseZGC", \
+    "-XX:MaxRAMPercentage=35.0", \
+    "-XX:InitialRAMPercentage=25.0", \
+    "-XX:MaxMetaspaceSize=96m", \
+    "-XX:+UseSerialGC", \
+    "-Xss256k", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]
