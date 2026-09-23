@@ -31,24 +31,20 @@ USER appuser
 EXPOSE 8080
 
 # JVM tuning para contenedores con poca memoria (512MB plan Render, free tier)
-# 23-09-2026: el tuning anterior (50% heap + ZGC) seguia siendo OOM-killed por Render
-# justo despues del arranque. ZGC tiene overhead fijo de memoria pensado para heaps
-# grandes con baja latencia, no es el mas eficiente para un heap chico de un solo
-# usuario (prueba QA). Ajustes:
-# - MaxRAMPercentage=35 / InitialRAMPercentage=25: heap mas chico, deja mas margen
-#   para metaspace, stack de threads, buffers directos y memoria nativa (fontconfig/
-#   JasperReports)
-# - MaxMetaspaceSize=96m: igual, mas margen
-# - UseSerialGC: mucho menor overhead fijo que ZGC/G1 para heaps chicos; el costo
-#   (pausas mas largas) es irrelevante para una instancia QA de un solo usuario
-# - Xss256k: stack por thread mas chico (default ~1MB); con el pool de Tomcat
-#   limitado via SERVER_TOMCAT_THREADS_MAX esto reduce bastante la memoria nativa
-#   reservada para stacks
+# 23-09-2026, segundo intento: el primer tuning (35% heap + metaspace 96m + SerialGC)
+# quedo corto de metaspace y ni siquiera termino de arrancar (OutOfMemoryError:
+# Metaspace creando el securityFilterChain de Spring Security, que genera bastantes
+# proxies/clases dinamicas). El tuning original (50% heap + metaspace 128m + ZGC) si
+# arrancaba pero moria por OOM del contenedor poco despues de terminar de iniciar.
+# Ajuste: bajar heap un poco (40% en vez de 50%) y el resto del ahorro sacarlo del
+# overhead fijo de ZGC (cambiado a SerialGC) y de los stacks de threads (Xss256k +
+# SERVER_TOMCAT_THREADS_MAX bajo via env var), dejando el metaspace generoso (160m)
+# ya que ahi fue donde realmente fallo.
 ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=35.0", \
+    "-XX:MaxRAMPercentage=40.0", \
     "-XX:InitialRAMPercentage=25.0", \
-    "-XX:MaxMetaspaceSize=96m", \
+    "-XX:MaxMetaspaceSize=160m", \
     "-XX:+UseSerialGC", \
     "-Xss256k", \
     "-Djava.security.egd=file:/dev/./urandom", \
