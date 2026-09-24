@@ -79,6 +79,10 @@ public class PaymentController {
         Map<String, Object> body = parseRawBody(rawBody);
         if (!isValidWebhookSignature(request, queryParams, body)) {
             LOGGER.warn("Platform webhook signature validation failed from {}", request.getRemoteAddr());
+            // TODO(QA-DIAG): log temporal solo en la rama de QA, no va al PR. No imprime el secret.
+            LOGGER.warn("[QA-DIAG] rechazado query='{}' hasSignature={} xRequestId={} body={}",
+                    request.getQueryString(), request.getHeader("x-signature") != null,
+                    request.getHeader("x-request-id"), rawBody);
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
         return handleWebhook(null, queryParams, body);
