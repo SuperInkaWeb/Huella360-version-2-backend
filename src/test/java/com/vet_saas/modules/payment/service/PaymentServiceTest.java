@@ -14,6 +14,8 @@ import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -21,7 +23,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -80,6 +84,31 @@ class PaymentServiceTest {
 
         verify(subscriptionService).processSubscriptionPayment(1L, null, 8L, "179577069875");
         verify(ordenRepository, never()).findByCodigoOrden(anyString());
+    }
+
+    /**
+     * Revision de Alexis (PR #7): el escenario rechazado no pudo validarse de punta a punta en el
+     * sandbox de Mercado Pago. Un pago de SUSCRIPCION no aprobado debe seguir la rama de suscripcion
+     * (sin buscar ninguna Orden: si fuera por la rama de ordenes fallaria con "Orden no encontrada")
+     * y NO debe activar el plan (proteccion de handleSubscriptionWebhook).
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"rejected", "cancelled", "pending", "in_process"})
+    void syncPaymentStatus_pagoDeSuscripcionNoAprobado_noActivaElPlanNiBuscaOrden(String estadoMp) {
+        when(mpGateway.getPaymentDetails("179656601317", "TEST-token")).thenReturn(payment);
+        when(payment.getMetadata()).thenReturn(Map.of(
+                "type", "SUBSCRIPTION",
+                "empresa_id", 2,
+                "plan_id", 9));
+        when(payment.getStatus()).thenReturn(estadoMp);
+        lenient().when(payment.getId()).thenReturn(179656601317L);
+
+        // Procesado como SUBSCRIPTION: termina sin error (por la rama ORDER lanzaria "Orden no encontrada")
+        assertDoesNotThrow(() -> paymentService.syncPaymentStatus("179656601317", "SUBEMP-2-1790264564625"));
+
+        verify(subscriptionService, never()).processSubscriptionPayment(any(), any(), any(), any());
+        verifyNoInteractions(ordenRepository);
+        verifyNoInteractions(pagoRepository, eventPublisher);
     }
 
     @Test
