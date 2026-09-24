@@ -487,7 +487,8 @@ public class SubscriptionService {
                 };
                 String successUrl = appProperties.getExternal().getFrontendUrl()
                                 + "/portal/" + portalPath + "/pago-exitoso";
-                String notificationUrl = appProperties.getExternal().getBackendUrl() + "/api/v1/payments/webhook";
+                // source_news=webhooks: solo notificaciones Webhook firmadas (sin IPN topic=payment/merchant_order)
+                String notificationUrl = appProperties.getExternal().getBackendUrl() + "/api/v1/payments/webhook?source_news=webhooks";
 
                 return mercadoPagoGateway.createPreference(
                                 appProperties.getExternal().getMercadoPago().getAccessToken(),
