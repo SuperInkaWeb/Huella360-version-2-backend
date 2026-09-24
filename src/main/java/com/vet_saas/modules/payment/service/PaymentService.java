@@ -174,7 +174,8 @@ public class PaymentService {
             PreferencePayerRequest payer = payerBuilder.build();
 
             String webhookBase = appProperties.getExternal().getBackendUrl();
-            String notificationUrl = webhookBase + "/api/v1/payments/webhook";
+            // source_news=webhooks: solo notificaciones Webhook firmadas (sin IPN topic=payment/merchant_order)
+            String notificationUrl = webhookBase + "/api/v1/payments/webhook?source_news=webhooks";
 
             PaymentPreferenceResponse response = mpGateway.createPreference(
                     accessToken,
