@@ -74,6 +74,12 @@ public interface OrdenRepository extends JpaRepository<Orden, Long>, JpaSpecific
                         "AND o.estado = 'PAGADO'")
         Long countDistinctClientesByEmpresa(@Param("empresaId") Long empresaId);
 
+        @Query("SELECT DISTINCT o.usuarioCliente.id FROM Orden o " +
+                        "WHERE o.empresa.id = :empresaId " +
+                        "AND o.estado = 'PAGADO' " +
+                        "AND o.usuarioCliente IS NOT NULL")
+        List<Long> findClienteIdsPagadosByEmpresa(@Param("empresaId") Long empresaId);
+
         @Query("SELECT COALESCE(SUM(o.total), 0) FROM Orden o WHERE o.estado = :estado")
         BigDecimal sumTotalByEstado(@Param("estado") EstadoOrden estado);
 

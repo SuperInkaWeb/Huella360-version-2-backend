@@ -19,7 +19,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.cache.annotation.Cacheable;
@@ -65,7 +67,11 @@ public class DashboardService {
         Long ordenesPagadasHoy = ordenRepository.countByEmpresaEstadoAndFechaGte(
                 empresaId, EstadoOrden.PAGADO, inicioDia);
 
-        Long clientesActivos = ordenRepository.countDistinctClientesByEmpresa(empresaId);
+        // Clientes activos: con ordenes pagadas o con citas confirmadas/completadas. Antes solo
+        // contaba ordenes, y una veterinaria que trabaja con citas veia 0 aunque el CRM listara clientes.
+        Set<Long> clientesIds = new HashSet<>(ordenRepository.findClienteIdsPagadosByEmpresa(empresaId));
+        clientesIds.addAll(citaRepository.findClienteIdsConCitasVigentesByEmpresa(empresaId));
+        Long clientesActivos = (long) clientesIds.size();
 
         long citasHoy = citaRepository.countByEmpresaIdAndFecha(empresaId, LocalDate.now());
         long citasPendientes = citaRepository.countByEmpresaIdAndEstado(empresaId, AppointmentStatus.SOLICITADA);

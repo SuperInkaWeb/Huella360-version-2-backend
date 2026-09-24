@@ -11,7 +11,7 @@ public record UpdateCompanyDto(
                 String descripcion,
                 String tipoServicio,
 
-                @Pattern(regexp = "\\d+", message = "El teléfono solo debe contener números") String telefono,
+                @Pattern(regexp = "\\d{6,15}", message = "El teléfono debe tener entre 6 y 15 dígitos, solo números") String telefono,
 
                 @Email(message = "Formato de email inválido") String emailContacto,
 
