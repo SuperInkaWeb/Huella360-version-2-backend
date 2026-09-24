@@ -122,8 +122,8 @@ public class PaymentController {
         String topic = queryParams.get("topic");
 
         if ("payment".equals(type) || "payment".equals(topic)) {
-            webhookEventService.saveEvent(id, pathEmpresaId);
-            webhookOrchestrator.processWebhookAsync(id, pathEmpresaId);
+            Long eventId = webhookEventService.saveEvent(id, pathEmpresaId).getId();
+            webhookOrchestrator.processWebhookAsync(eventId, id, pathEmpresaId);
         }
 
         return ResponseEntity.ok().build();
