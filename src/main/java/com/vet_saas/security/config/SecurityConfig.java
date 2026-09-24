@@ -190,6 +190,17 @@ public class SecurityConfig {
                         ).permitAll()
 
                         // =====================================================
+                        // LIBRO DE RECLAMACIONES (Ley 29571 / D.S. 011-2011-PCM)
+                        // Debe poder usarse sin cuenta. Rate limit en RateLimitFilter.
+                        // El listado y el cambio de estado siguen siendo solo ADMIN.
+                        // =====================================================
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/reclamos"
+                        ).permitAll()
+
+                        // =====================================================
                         // WEBSOCKET
                         // =====================================================
 
