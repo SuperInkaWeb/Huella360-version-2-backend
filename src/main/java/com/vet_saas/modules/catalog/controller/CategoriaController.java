@@ -4,6 +4,7 @@ import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.catalog.dto.CreateCategoriaRequest;
 import com.vet_saas.modules.catalog.dto.UpdateCategoriaRequest;
 import com.vet_saas.modules.catalog.dto.CategoriaResponse;
+import com.vet_saas.modules.catalog.dto.MarketplaceCategoriaResponse;
 import com.vet_saas.modules.catalog.service.CategoriaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,13 @@ public class CategoriaController {
         return ResponseEntity.ok(ApiResponse.success(
                 categoriaService.getParentCategories(),
                 "Categorías padre recuperadas con éxito"));
+    }
+
+    @GetMapping("/marketplace")
+    public ResponseEntity<ApiResponse<List<MarketplaceCategoriaResponse>>> getMarketplaceCategories() {
+        return ResponseEntity.ok(ApiResponse.success(
+                categoriaService.getMarketplaceCategories(),
+                "Categorías del marketplace recuperadas con éxito"));
     }
 
     @GetMapping("/{padreId}/subcategories")

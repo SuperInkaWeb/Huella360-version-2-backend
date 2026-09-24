@@ -5,8 +5,12 @@ import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.catalog.dto.CreateCategoriaRequest;
 import com.vet_saas.modules.catalog.dto.UpdateCategoriaRequest;
 import com.vet_saas.modules.catalog.dto.CategoriaResponse;
+import com.vet_saas.modules.catalog.dto.MarketplaceCategoriaResponse;
 import com.vet_saas.modules.catalog.model.Categoria;
+import com.vet_saas.modules.catalog.model.EstadoProducto;
+import com.vet_saas.modules.catalog.repository.CategoriaProductCount;
 import com.vet_saas.modules.catalog.repository.CategoriaRepository;
+import com.vet_saas.modules.catalog.repository.ProductoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -15,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,6 +27,7 @@ import java.util.stream.Collectors;
 public class CategoriaService {
 
     private final CategoriaRepository categoriaRepository;
+    private final ProductoRepository productoRepository;
 
     @Cacheable(value = "categorias", key = "'allActive'")
     @Transactional(readOnly = true)
@@ -44,6 +50,41 @@ public class CategoriaService {
     public List<CategoriaResponse> getActiveSubcategories(Long padreId) {
         return categoriaRepository.findByPadreIdAndActivoTrueOrderByOrdenAsc(padreId).stream()
                 .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Árbol de categorías para el marketplace: solo las que tienen productos públicos.
+     * Un padre cuenta sus productos directos más los de sus subcategorías. No se cachea
+     * porque el conteo cambia cada vez que una empresa publica o retira un producto.
+     */
+    @Transactional(readOnly = true)
+    public List<MarketplaceCategoriaResponse> getMarketplaceCategories() {
+        Map<Long, Long> countByCategoria = productoRepository.countPublicProductsByCategoria(EstadoProducto.ACTIVO)
+                .stream()
+                .collect(Collectors.toMap(CategoriaProductCount::getCategoriaId, CategoriaProductCount::getTotal));
+
+        List<Categoria> activas = categoriaRepository.findByActivoTrueOrderByOrdenAsc();
+
+        Map<Long, List<Categoria>> hijasPorPadre = activas.stream()
+                .filter(c -> c.getPadre() != null)
+                .collect(Collectors.groupingBy(c -> c.getPadre().getId()));
+
+        return activas.stream()
+                .filter(c -> c.getPadre() == null)
+                .map(padre -> {
+                    List<MarketplaceCategoriaResponse> subcategorias = hijasPorPadre
+                            .getOrDefault(padre.getId(), List.of()).stream()
+                            .filter(hija -> countByCategoria.getOrDefault(hija.getId(), 0L) > 0)
+                            .map(hija -> toMarketplaceResponse(hija, countByCategoria.get(hija.getId()), List.of()))
+                            .collect(Collectors.toList());
+
+                    long total = countByCategoria.getOrDefault(padre.getId(), 0L)
+                            + subcategorias.stream().mapToLong(MarketplaceCategoriaResponse::productCount).sum();
+
+                    return toMarketplaceResponse(padre, total, subcategorias);
+                })
+                .filter(padre -> padre.productCount() > 0)
                 .collect(Collectors.toList());
     }
 
@@ -168,6 +209,17 @@ public class CategoriaService {
             throw new BusinessException(
                     "Se ha detectado una profundidad máxima superada o una posible corrupción previa en la jerarquía de categorías.");
         }
+    }
+
+    private MarketplaceCategoriaResponse toMarketplaceResponse(
+            Categoria categoria, long productCount, List<MarketplaceCategoriaResponse> subcategorias) {
+        return new MarketplaceCategoriaResponse(
+                categoria.getId(),
+                categoria.getNombre(),
+                categoria.getSlug(),
+                categoria.getIconoUrl(),
+                productCount,
+                subcategorias);
     }
 
     private CategoriaResponse mapToResponse(Categoria categoria) {
