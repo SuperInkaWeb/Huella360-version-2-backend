@@ -18,7 +18,7 @@ public record CreateCompanyDto(
 
                 @NotBlank(message = "El tipo de servicio es obligatorio (VETERINARIA, PETSHOP, ETC)") String tipoServicio,
 
-                @NotBlank(message = "El teléfono es obligatorio") @Pattern(regexp = "\\d+", message = "El teléfono solo debe contener números") String telefono,
+                @NotBlank(message = "El teléfono es obligatorio") @Pattern(regexp = "\\d{6,15}", message = "El teléfono debe tener entre 6 y 15 dígitos, solo números") String telefono,
 
                 @NotBlank(message = "El email de contacto es obligatorio") @Email(message = "Formato de email inválido") String emailContacto,
 
