@@ -55,7 +55,10 @@ public class ReclamoService {
         if (archivo != null && !archivo.isEmpty()) {
             try {
                 Map<?, ?> uploadResult = cloudinary.uploader().upload(archivo.getBytes(),
-                        ObjectUtils.asMap("resource_type", "auto", "folder", "reclamos/adjuntos"));
+                        // Un PDF subido como "image"/"auto" queda bloqueado por Cloudinary ("deny or ACL
+                        // failure") salvo que la cuenta permita entregar PDFs: se sube como "raw".
+                        ObjectUtils.asMap("resource_type", "application/pdf".equals(archivo.getContentType()) ? "raw" : "auto",
+                                "folder", "reclamos/adjuntos"));
                 archivoUrl = String.valueOf(uploadResult.get("secure_url"));
             } catch (Exception e) {
                 LOGGER.error("Error al subir archivo de sustento del reclamo: {}", e.getMessage(), e);
@@ -149,10 +152,12 @@ public class ReclamoService {
     private String subirPdfACloudinary(byte[] pdfBytes, Long reclamoId) {
         try {
             Map<String, Object> options = ObjectUtils.asMap(
-                    "resource_type", "image",
-                    "public_id", "reclamos/reclamo_" + String.format("%06d", reclamoId),
-                    "format", "pdf",
-                    "flags", "attachment"
+                    // "raw": como "image" con format=pdf, Cloudinary respondia 401 "deny or ACL failure" al
+                    // descargar (las cuentas bloquean la entrega de PDFs por defecto; visto en QA el 24/09).
+                    // Los archivos raw no tienen esa restriccion. La extension va en el public_id.
+                    "resource_type", "raw",
+                    "public_id", "reclamos/reclamo_" + String.format("%06d", reclamoId) + ".pdf",
+                    "overwrite", true
             );
 
             // byte[]: el SDK no acepta InputStream (ver registrarReclamo)
