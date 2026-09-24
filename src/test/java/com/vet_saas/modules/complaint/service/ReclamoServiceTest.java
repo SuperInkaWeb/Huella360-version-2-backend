@@ -74,8 +74,13 @@ class ReclamoServiceTest {
         assertThat(r.numero()).isEqualTo("000007");
         assertThat(r.pdfUrl()).isEqualTo("https://cdn/reclamo_000007.pdf");
         ArgumentCaptor<Object> archivo = ArgumentCaptor.forClass(Object.class);
-        verify(cloudinary.uploader()).upload(archivo.capture(), anyMap());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> opciones = ArgumentCaptor.forClass(Map.class);
+        verify(cloudinary.uploader()).upload(archivo.capture(), opciones.capture());
         assertThat(archivo.getValue()).isInstanceOf(byte[].class); // nunca InputStream
+        // "raw": subido como "image", Cloudinary bloqueaba la descarga del PDF (401 en QA)
+        assertThat(opciones.getValue()).containsEntry("resource_type", "raw");
+        assertThat(opciones.getValue().get("public_id")).isEqualTo("reclamos/reclamo_000007.pdf");
         ArgumentCaptor<Reclamo> guardado = ArgumentCaptor.forClass(Reclamo.class);
         verify(reclamoRepository, atLeastOnce()).save(guardado.capture());
         assertThat(guardado.getValue().getUsuario()).isNull();
