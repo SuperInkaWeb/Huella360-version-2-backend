@@ -27,7 +27,6 @@ public class MercadoPagoWebhookSignatureValidator {
             return false;
         }
         if (xSignature == null || xSignature.isBlank()) {
-            LOGGER.warn("[QA-DIAG] webhook sin x-signature, x-request-id={} dataId={}", xRequestId, dataId);
             return false;
         }
 
@@ -46,13 +45,9 @@ public class MercadoPagoWebhookSignatureValidator {
         String manifest = buildManifest(dataId, xRequestId, ts);
         try {
             String expected = hmacSha256Hex(secret, manifest);
-            boolean ok = MessageDigest.isEqual(
+            return MessageDigest.isEqual(
                     expected.getBytes(StandardCharsets.UTF_8),
                     v1.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8));
-            // TODO(QA-DIAG): log temporal solo en la rama de QA, no va al PR. No imprime el secret.
-            LOGGER.warn("[QA-DIAG] webhook firma ok={} manifest='{}' v1Recibido={} v1Calculado={} secretLen={} secretTrim={}",
-                    ok, manifest, v1, expected, secret.length(), secret.strip().length() == secret.length());
-            return ok;
         } catch (Exception e) {
             // Intentional: any validation error results in rejection
             LOGGER.error("Error validating webhook signature", e);
