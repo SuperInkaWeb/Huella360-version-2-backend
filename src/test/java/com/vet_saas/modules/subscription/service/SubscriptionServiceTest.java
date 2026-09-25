@@ -15,11 +15,13 @@ import com.vet_saas.modules.subscription.repository.PlanRepository;
 import com.vet_saas.modules.subscription.repository.SuscripcionRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -51,6 +53,7 @@ class SubscriptionServiceTest {
     @Mock private MercadoPagoGateway mercadoPagoGateway;
     @Mock private com.vet_saas.config.AppProperties appProperties;
     @Mock private IaUsageRepository iaUsageRepository;
+    @Mock private UsuarioRepository usuarioRepository;
 
     private SubscriptionService subscriptionService;
 
@@ -62,7 +65,7 @@ class SubscriptionServiceTest {
         subscriptionService = new SubscriptionService(
                 suscripcionRepository, planRepository, productoRepository, empresaLookupService,
                 veterinarioRepository, mascotaRepository, servicioRepository, mercadoPagoGateway,
-                appProperties, iaUsageRepository);
+                appProperties, iaUsageRepository, usuarioRepository);
 
         planGratuito = Plan.builder()
                 .id(7L).nombre("Huella Free B2B").precioMensual(BigDecimal.ZERO)
@@ -152,6 +155,62 @@ class SubscriptionServiceTest {
         BusinessException ex = assertThrows(BusinessException.class,
                         () -> subscriptionService.updatePlanForUsuario(usuarioVet, 8L));
         assertTrue(ex.getMessage().contains("pago"));
+        verify(suscripcionRepository, never()).save(any());
+    }
+
+    // --- H360: pago de suscripcion de un CLIENTE (metadata solo trae usuario_id) ---
+    // Confirmado en QA el 2026-09-25: el cliente pago Huella Care (S/14.90, aprobado en Mercado Pago)
+    // y seguia en "Huella Basica" porque este metodo solo contemplaba empresa o veterinario.
+
+    @Test
+    void processSubscriptionPayment_cliente_activaPlanEnSuSuscripcion() {
+        Plan planCare = Plan.builder().id(5L).nombre("Huella Care").precioMensual(new BigDecimal("14.90"))
+                .tipo("B2C").activo(true).build();
+        Usuario cliente = Usuario.builder().id(11L).correo("cliente@test.com").rol(Role.CLIENTE).build();
+        Suscripcion subActual = Suscripcion.builder().id(6L).usuario(cliente).plan(planGratuito)
+                .estado(EstadoSuscripcion.ACTIVA).build();
+
+        when(suscripcionRepository.findByUsuarioId(11L)).thenReturn(Optional.of(subActual));
+        when(usuarioRepository.findById(11L)).thenReturn(Optional.of(cliente));
+        when(planRepository.findById(5L)).thenReturn(Optional.of(planCare));
+
+        subscriptionService.processSubscriptionPayment(null, null, 11L, 5L, "179000000001");
+
+        ArgumentCaptor<Suscripcion> captor = ArgumentCaptor.forClass(Suscripcion.class);
+        verify(suscripcionRepository).save(captor.capture());
+        Suscripcion guardada = captor.getValue();
+        assertEquals(6L, guardada.getId());
+        assertEquals("Huella Care", guardada.getPlan().getNombre());
+        assertEquals(EstadoSuscripcion.ACTIVA, guardada.getEstado());
+        assertNotNull(guardada.getFechaFin());
+        verify(veterinarioRepository, never()).findById(any());
+    }
+
+    @Test
+    void processSubscriptionPayment_clienteSinSuscripcion_creaUnaNuevaDelUsuario() {
+        Plan planCare = Plan.builder().id(5L).nombre("Huella Care").precioMensual(new BigDecimal("14.90"))
+                .tipo("B2C").activo(true).build();
+        Usuario cliente = Usuario.builder().id(11L).correo("cliente@test.com").rol(Role.CLIENTE).build();
+
+        when(suscripcionRepository.findByUsuarioId(11L)).thenReturn(Optional.empty());
+        when(usuarioRepository.findById(11L)).thenReturn(Optional.of(cliente));
+        when(planRepository.findById(5L)).thenReturn(Optional.of(planCare));
+
+        subscriptionService.processSubscriptionPayment(null, null, 11L, 5L, "179000000002");
+
+        ArgumentCaptor<Suscripcion> captor = ArgumentCaptor.forClass(Suscripcion.class);
+        verify(suscripcionRepository).save(captor.capture());
+        assertSame(cliente, captor.getValue().getUsuario());
+        assertEquals("Huella Care", captor.getValue().getPlan().getNombre());
+        assertNull(captor.getValue().getEmpresa());
+        assertNull(captor.getValue().getVeterinario());
+    }
+
+    @Test
+    void processSubscriptionPayment_sinDueno_fallaConMensajeClaro() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> subscriptionService.processSubscriptionPayment(null, null, null, 5L, "179000000003"));
+        assertTrue(ex.getMessage().contains("179000000003"));
         verify(suscripcionRepository, never()).save(any());
     }
 }
