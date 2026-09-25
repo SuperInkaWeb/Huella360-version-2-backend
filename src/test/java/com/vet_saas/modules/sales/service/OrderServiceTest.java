@@ -6,7 +6,11 @@ import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.catalog.model.Producto;
 import com.vet_saas.modules.catalog.repository.ProductoRepository;
 import com.vet_saas.modules.catalog.repository.ServicioRepository;
+import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
+import com.vet_saas.modules.points.model.CanjeRecompensa;
+import com.vet_saas.modules.points.model.PuntosCliente;
+import com.vet_saas.modules.points.model.Recompensa;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.points.service.PointsService;
@@ -38,6 +42,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -230,5 +235,79 @@ class OrderServiceTest {
         assertEquals(new BigDecimal("100.00"), saved.getSubtotal());
         assertEquals(new BigDecimal("15.00"), saved.getCostoEnvio());
         assertEquals(new BigDecimal("115.00"), saved.getTotal());
+    }
+
+    // --- H360: el cupon canjeado debe ser del cliente que compra y de la tienda de la orden ---
+    // Antes applyRewardDiscount aceptaba cualquier canjeRecompensaId (ids secuenciales): un cliente
+    // podia aplicar el cupon que otra persona canjeo con sus puntos, o el de otra tienda.
+
+    private CreateOrderDto ordenConCupon(Long canjeId) {
+        return new CreateOrderDto(10L, null, null, null, null, null, null, null, null, canjeId,
+                List.of(new OrderItemDto(100L, null, 2)));
+    }
+
+    private Empresa prepararCompraDeCliente(Usuario cliente) {
+        var auth = new UsernamePasswordAuthenticationToken(cliente, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        Empresa empresa = buildEmpresa(10L, buildUser(2L, Role.EMPRESA));
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(cliente));
+        when(empresaRepository.findById(10L)).thenReturn(Optional.of(empresa));
+        Producto producto = Producto.builder().id(100L).nombre("Shampoo")
+                .precio(new BigDecimal("25.00")).stock(50).empresa(empresa).build();
+        when(productoRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(producto));
+        lenient().when(ordenRepository.save(any(Orden.class))).thenAnswer(inv -> {
+            Orden o = inv.getArgument(0);
+            o.setId(1L);
+            return o;
+        });
+        return empresa;
+    }
+
+    private CanjeRecompensa cupon(Long perfilDueno, Empresa tienda) {
+        Recompensa recompensa = Recompensa.builder().id(50L).empresa(tienda)
+                .tipoDescuento("MONTO_FIJO").valorDescuento(new BigDecimal("10.00")).build();
+        return CanjeRecompensa.builder().id(77L).recompensa(recompensa).utilizado(false)
+                .puntosCliente(PuntosCliente.builder().id(perfilDueno).build()).build();
+    }
+
+    @Test
+    void createOrder_cuponPropioDeLaTienda_aplicaDescuento() {
+        Usuario cliente = buildUser(1L, Role.CLIENTE);
+        Empresa empresa = prepararCompraDeCliente(cliente);
+        when(clienteRepository.findByUsuarioId(1L)).thenReturn(Optional.of(PerfilCliente.builder().id(3L).build()));
+        when(rewardService.getCanjeById(77L)).thenReturn(cupon(3L, empresa));
+
+        orderService.createOrder(ordenConCupon(77L));
+
+        ArgumentCaptor<Orden> captor = ArgumentCaptor.forClass(Orden.class);
+        verify(ordenRepository).save(captor.capture());
+        assertEquals(0, new BigDecimal("10.00").compareTo(captor.getValue().getDescuento()));
+        verify(rewardService).markRewardAsUsed(77L, null);
+    }
+
+    @Test
+    void createOrder_cuponDeOtroCliente_seRechaza() {
+        Usuario cliente = buildUser(1L, Role.CLIENTE);
+        Empresa empresa = prepararCompraDeCliente(cliente);
+        when(clienteRepository.findByUsuarioId(1L)).thenReturn(Optional.of(PerfilCliente.builder().id(3L).build()));
+        when(rewardService.getCanjeById(77L)).thenReturn(cupon(9L, empresa));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> orderService.createOrder(ordenConCupon(77L)));
+        assertTrue(ex.getMessage().contains("no te pertenece"));
+        verify(ordenRepository, never()).save(any());
+        verify(rewardService, never()).markRewardAsUsed(anyLong(), any());
+    }
+
+    @Test
+    void createOrder_cuponDeOtraTienda_seRechaza() {
+        Usuario cliente = buildUser(1L, Role.CLIENTE);
+        prepararCompraDeCliente(cliente);
+        Empresa otraTienda = buildEmpresa(99L, buildUser(5L, Role.EMPRESA));
+        when(clienteRepository.findByUsuarioId(1L)).thenReturn(Optional.of(PerfilCliente.builder().id(3L).build()));
+        when(rewardService.getCanjeById(77L)).thenReturn(cupon(3L, otraTienda));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> orderService.createOrder(ordenConCupon(77L)));
+        assertTrue(ex.getMessage().contains("tienda"));
+        verify(ordenRepository, never()).save(any());
     }
 }

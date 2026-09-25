@@ -6,6 +6,8 @@ import com.vet_saas.modules.points.dto.RedeemedRewardDto;
 import com.vet_saas.modules.points.dto.RewardDto;
 import com.vet_saas.modules.points.service.RewardService;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
+import com.vet_saas.modules.client.model.PerfilCliente;
+import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.service.UsuarioService;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
@@ -28,6 +30,7 @@ public class RewardController {
     private final RewardService rewardService;
     private final UsuarioService usuarioService;
     private final EmpresaRepository empresaRepository;
+    private final ClienteRepository clienteRepository;
 
     // --- COMPANY ENDPOINTS ---
 
@@ -74,7 +77,7 @@ public class RewardController {
     @PostMapping("/{idRecompensa}/redeem")
     @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<ApiResponse<RedeemedRewardDto>> redeemReward(@PathVariable Long idRecompensa, Principal principal) {
-        Long idPerfil = getUsuarioId(principal);
+        Long idPerfil = getPerfilClienteId(principal);
         RedeemedRewardDto response = rewardService.redeemReward(idPerfil, idRecompensa);
         return ResponseEntity.ok(ApiResponse.success(response, "¡Recompensa canjeada con éxito!"));
     }
@@ -82,7 +85,7 @@ public class RewardController {
     @GetMapping("/my-redeemed")
     @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<ApiResponse<Page<RedeemedRewardDto>>> getMyRedeemedRewards(Pageable pageable, Principal principal) {
-        Long idPerfil = getUsuarioId(principal);
+        Long idPerfil = getPerfilClienteId(principal);
         Page<RedeemedRewardDto> result = rewardService.getMyRedeemedRewards(idPerfil, pageable);
         return ResponseEntity.ok(ApiResponse.success(result, "Mis recompensas canjeadas"));
     }
@@ -90,14 +93,19 @@ public class RewardController {
     @GetMapping("/checkout/available/{idEmpresa}")
     @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<ApiResponse<List<RedeemedRewardDto>>> getAvailableRewardsForCheckout(@PathVariable Long idEmpresa, Principal principal) {
-        Long idPerfil = getUsuarioId(principal);
+        Long idPerfil = getPerfilClienteId(principal);
         List<RedeemedRewardDto> result = rewardService.getAvailableRewardsForCheckout(idPerfil, idEmpresa);
         return ResponseEntity.ok(ApiResponse.success(result, "Recompensas disponibles para el checkout"));
     }
 
-    private Long getUsuarioId(Principal principal) {
+    // Los puntos y canjes se guardan por id de PerfilCliente (PuntosCliente usa @MapsId del perfil),
+    // no por id de Usuario. Antes se pasaba usuario.getId(): el cliente veia 0 puntos y, cuando los
+    // ids coincidian con el perfil de otro cliente, veia y gastaba los puntos de esa otra persona.
+    private Long getPerfilClienteId(Principal principal) {
         Usuario usuario = usuarioService.findByCorreo(principal.getName());
-        return usuario.getId();
+        return clienteRepository.findByUsuarioId(usuario.getId())
+                .map(PerfilCliente::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "usuarioId", usuario.getId()));
     }
 
     private Long getEmpresaId(Principal principal) {
