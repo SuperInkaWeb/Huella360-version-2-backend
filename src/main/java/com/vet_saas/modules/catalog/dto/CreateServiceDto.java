@@ -1,6 +1,7 @@
 package com.vet_saas.modules.catalog.dto;
 
 import com.vet_saas.modules.catalog.model.ModalidadServicio;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -15,7 +16,7 @@ public record CreateServiceDto(
 
         @NotNull(message = "El precio es obligatorio") @PositiveOrZero(message = "El precio no puede ser negativo") BigDecimal precio,
 
-        @Positive(message = "La duración en minutos debe ser mayor a 0") Integer duracionMinutos,
+        @Positive(message = "La duración en minutos debe ser mayor a 0") @Max(value = 480, message = "La duración no puede superar 480 minutos (8 horas)") Integer duracionMinutos,
 
         @NotNull(message = "La modalidad del servicio es obligatoria") ModalidadServicio modalidad,
 

@@ -10,6 +10,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -17,11 +18,16 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -146,6 +152,53 @@ public class GlobalExceptionHandler {
                 "El cuerpo de la solicitud tiene un formato inválido o contiene campos no reconocidos",
                 request.getRequestURI(),
                 null);
+    }
+
+    // --- Errores del cliente de Spring MVC ---
+    // Sin estos handlers caian en handleGlobalException y se respondia 500 "Error interno del servidor"
+    // (y se logueaban como ERROR) ante solicitudes mal formadas: ids no numericos como
+    // /companies/public/NaN, metodo HTTP equivocado, parametros faltantes o rutas inexistentes.
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST,
+                "El parámetro '" + ex.getName() + "' tiene un valor inválido",
+                request.getRequestURI(), null);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException ex,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST,
+                "Falta el parámetro obligatorio '" + ex.getParameterName() + "'",
+                request.getRequestURI(), null);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+            HttpServletRequest request) {
+        ResponseEntity<ErrorResponse> response = buildErrorResponse(HttpStatus.METHOD_NOT_ALLOWED,
+                "Método " + ex.getMethod() + " no permitido para este recurso",
+                request.getRequestURI(), null);
+        HttpHeaders headers = new HttpHeaders();
+        if (ex.getSupportedHttpMethods() != null) {
+            headers.setAllow(ex.getSupportedHttpMethods());
+        }
+        return new ResponseEntity<>(response.getBody(), headers, response.getStatusCode());
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "Tipo de contenido no soportado", request.getRequestURI(), null);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException ex,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado", request.getRequestURI(), null);
     }
 
     @ExceptionHandler(Exception.class)

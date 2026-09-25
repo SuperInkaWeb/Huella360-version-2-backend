@@ -15,7 +15,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 import java.util.Map;
@@ -108,5 +115,58 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("Error interno del servidor", response.getBody().getMessage());
+    }
+
+    // --- Errores del cliente: antes caian en handleGlobalException y respondian 500 ---
+    // (reproducido en QA el 24-09: /companies/public/NaN, GET /payments/webhook, DELETE /companies/public,
+    // /public/ruta-que-no-existe -> todos 500 "Error interno del servidor")
+
+    @Test
+    void handleTypeMismatch_idNoNumerico_returns400() {
+        MethodArgumentTypeMismatchException ex = new MethodArgumentTypeMismatchException(
+                "NaN", Long.class, "id", mock(MethodParameter.class), new NumberFormatException("For input string: \"NaN\""));
+
+        ResponseEntity<ErrorResponse> response = handler.handleTypeMismatch(ex, request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("El parámetro 'id' tiene un valor inválido", response.getBody().getMessage());
+        assertFalse(response.getBody().isSuccess());
+    }
+
+    @Test
+    void handleMissingParameter_returns400ConNombreDelParametro() {
+        ResponseEntity<ErrorResponse> response = handler.handleMissingParameter(
+                new MissingServletRequestParameterException("payment_id", "String"), request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Falta el parámetro obligatorio 'payment_id'", response.getBody().getMessage());
+    }
+
+    @Test
+    void handleMethodNotSupported_returns405ConHeaderAllow() {
+        ResponseEntity<ErrorResponse> response = handler.handleMethodNotSupported(
+                new HttpRequestMethodNotSupportedException("GET", List.of("POST")), request);
+
+        assertEquals(HttpStatus.METHOD_NOT_ALLOWED, response.getStatusCode());
+        assertEquals("Método GET no permitido para este recurso", response.getBody().getMessage());
+        assertTrue(response.getHeaders().getAllow().contains(HttpMethod.POST));
+        assertEquals(405, response.getBody().getStatus());
+    }
+
+    @Test
+    void handleMediaTypeNotSupported_returns415() {
+        ResponseEntity<ErrorResponse> response = handler.handleMediaTypeNotSupported(
+                new HttpMediaTypeNotSupportedException("text/plain no soportado"), request);
+
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+    }
+
+    @Test
+    void handleNoResourceFound_rutaInexistente_returns404() {
+        ResponseEntity<ErrorResponse> response = handler.handleNoResourceFound(
+                new NoResourceFoundException(HttpMethod.GET, "api/v1/public/ruta-que-no-existe"), request);
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertEquals("Recurso no encontrado", response.getBody().getMessage());
     }
 }
