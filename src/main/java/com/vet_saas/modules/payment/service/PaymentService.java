@@ -228,13 +228,39 @@ public class PaymentService {
     @Transactional
     public void syncPaymentStatus(String paymentId, String codigoOrden) {
         LOGGER.info("Sincronizando pago manualmente. paymentId: {}, codigoOrden: {}", paymentId, codigoOrden);
+
+        // H360-SEC/BUG: antes de esta correccion, se buscaba la Orden de marketplace
+        // incondicionalmente, ANTES de mirar de que tipo de pago se trataba. Como las
+        // suscripciones nunca crean una Orden, cualquier pago de plan aprobado por
+        // Mercado Pago terminaba mostrando "Orden no encontrada" al cliente en la
+        // pantalla de retorno, incluso cuando el cobro si se hizo correctamente
+        // (confirmado en vivo: pago real aprobado, external_reference SUBEMP-1-...,
+        // plan nunca se activo). El resto del codigo (processPaymentDatabaseTransaction,
+        // llamado desde el webhook automatico) ya distingue por metadata.type - se aplica
+        // el mismo criterio aqui, antes de tocar la tabla de Ordenes.
+        String tokenToUse = determineTokenToUse(null);
+        Payment payment = mpGateway.getPaymentDetails(paymentId, tokenToUse);
+        Map<String, Object> metadata = payment.getMetadata();
+
+        if (metadata == null) {
+            LOGGER.error("El pago {} no contiene metadata", paymentId);
+            throw new BusinessException("El pago no contiene informacion suficiente para sincronizarlo.");
+        }
+
+        String type = metadata.get("type") != null ? metadata.get("type").toString() : "ORDER";
+
+        if ("SUBSCRIPTION".equals(type)) {
+            handleSubscriptionWebhook(payment, metadata);
+            return;
+        }
+
         Orden orden = ordenRepository.findByCodigoOrden(codigoOrden)
                 .orElseThrow(() -> new BusinessException("Orden no encontrada: " + codigoOrden));
 
         String pathEmpresaId = orden.getEmpresa() != null ? orden.getEmpresa().getId().toString()
                 : "vet_" + orden.getVeterinario().getId();
 
-        processWebhook(paymentId, pathEmpresaId);
+        processPaymentDatabaseTransaction(payment, metadata, pathEmpresaId);
     }
 
     private void handleSubscriptionWebhook(Payment payment, Map<String, Object> metadata) {
