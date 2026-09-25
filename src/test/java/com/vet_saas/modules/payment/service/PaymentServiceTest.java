@@ -223,7 +223,7 @@ class PaymentServiceTest {
 
         paymentService.syncPaymentStatus(cliente, "179843282547", "SUBCLI-11-1790351144276");
 
-        verify(subscriptionService).processSubscriptionPayment(any(), any(), any(), any());
+        verify(subscriptionService).processSubscriptionPayment(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -248,6 +248,6 @@ class PaymentServiceTest {
 
         paymentService.syncPaymentStatus(admin, "179843282547", "SUBEMP-3-1");
 
-        verify(subscriptionService).processSubscriptionPayment(any(), any(), any(), any());
+        verify(subscriptionService).processSubscriptionPayment(any(), any(), any(), any(), any());
     }
 }
