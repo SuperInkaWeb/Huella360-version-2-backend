@@ -190,12 +190,15 @@ public class PaymentController {
         return id;
     }
 
+    // La pantalla de retorno de Mercado Pago (/marketplace/success y /portal/*/pago-exitoso) la usa el
+    // que pago: cliente, empresa o veterinario. El servicio valida que el pago sea del usuario.
     @GetMapping("/sync")
-    @PreAuthorize("hasAnyRole('EMPRESA', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'EMPRESA', 'VETERINARIO', 'ADMIN')")
     public ResponseEntity<ApiResponse<Void>> syncPayment(
+            @AuthenticationPrincipal Usuario usuario,
             @RequestParam("payment_id") String paymentId,
             @RequestParam("external_reference") String codigoOrden) {
-        paymentService.syncPaymentStatus(paymentId, codigoOrden);
+        paymentService.syncPaymentStatus(usuario, paymentId, codigoOrden);
         return ResponseEntity.ok(ApiResponse.success(null, "Pago sincronizado correctamente"));
     }
 }

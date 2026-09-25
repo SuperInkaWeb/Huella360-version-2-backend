@@ -226,7 +226,7 @@ public class PaymentService {
     }
 
     @Transactional
-    public void syncPaymentStatus(String paymentId, String codigoOrden) {
+    public void syncPaymentStatus(Usuario usuario, String paymentId, String codigoOrden) {
         LOGGER.info("Sincronizando pago manualmente. paymentId: {}, codigoOrden: {}", paymentId, codigoOrden);
 
         // H360-SEC/BUG: antes de esta correccion, se buscaba la Orden de marketplace
@@ -249,6 +249,8 @@ public class PaymentService {
 
         String type = metadata.get("type") != null ? metadata.get("type").toString() : "ORDER";
 
+        verificarQueElPagoEsDelUsuario(usuario, payment, metadata, type);
+
         if ("SUBSCRIPTION".equals(type)) {
             handleSubscriptionWebhook(payment, metadata);
             return;
@@ -261,6 +263,43 @@ public class PaymentService {
                 : "vet_" + orden.getVeterinario().getId();
 
         processPaymentDatabaseTransaction(payment, metadata, pathEmpresaId);
+    }
+
+    /**
+     * GET /payments/sync lo llama quien acaba de pagar. Sin esta validacion, cualquier usuario autenticado
+     * podria forzar el procesamiento de pagos ajenos. Reglas:
+     * - ADMIN: cualquier pago.
+     * - Suscripcion: el user_id de la metadata (lo pone el backend al crear la preferencia) debe ser el usuario.
+     * - Orden: la orden del pago (segun su external_reference, no el parametro de la URL) debe ser del
+     *   cliente que compro o de la empresa / veterinario que vende.
+     */
+    private void verificarQueElPagoEsDelUsuario(Usuario usuario, Payment payment, Map<String, Object> metadata,
+            String type) {
+        if (usuario.getRol() == com.vet_saas.modules.user.model.Role.ADMIN) {
+            return;
+        }
+
+        boolean esSuyo;
+        if ("SUBSCRIPTION".equals(type)) {
+            Object userId = metadata.get("user_id");
+            esSuyo = userId != null
+                    && Double.valueOf(userId.toString()).longValue() == usuario.getId();
+        } else {
+            String referencia = payment.getExternalReference();
+            Orden orden = referencia == null ? null : ordenRepository.findByCodigoOrden(referencia).orElse(null);
+            esSuyo = orden != null && (esElUsuario(orden.getUsuarioCliente(), usuario)
+                    || (orden.getEmpresa() != null && esElUsuario(orden.getEmpresa().getUsuarioPropietario(), usuario))
+                    || (orden.getVeterinario() != null && esElUsuario(orden.getVeterinario().getUsuario(), usuario)));
+        }
+
+        if (!esSuyo) {
+            LOGGER.warn("Usuario {} intento sincronizar el pago {} que no le pertenece", usuario.getId(), payment.getId());
+            throw new ForbiddenException("No puedes sincronizar un pago que no es tuyo.");
+        }
+    }
+
+    private boolean esElUsuario(Usuario candidato, Usuario usuario) {
+        return candidato != null && candidato.getId() != null && candidato.getId().equals(usuario.getId());
     }
 
     private void handleSubscriptionWebhook(Payment payment, Map<String, Object> metadata) {
