@@ -78,7 +78,7 @@ class PaymentServiceTest {
 
         paymentService.syncPaymentStatus("179577069875", "SUBEMP-1-1790204973489");
 
-        verify(subscriptionService).processSubscriptionPayment(1L, null, 8L, "179577069875");
+        verify(subscriptionService).processSubscriptionPayment(1L, null, null, 8L, "179577069875");
         verify(ordenRepository, never()).findByCodigoOrden(anyString());
     }
 
