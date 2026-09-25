@@ -44,6 +44,7 @@ public class SubscriptionService {
         private final MercadoPagoGateway mercadoPagoGateway;
         private final com.vet_saas.config.AppProperties appProperties;
         private final IaUsageRepository iaUsageRepository;
+        private final com.vet_saas.modules.user.repository.UsuarioRepository usuarioRepository;
 
         private Empresa getEmpresaFromUsuario(com.vet_saas.modules.user.model.Usuario usuario) {
                 return empresaLookupService.getEmpresaFromUsuario(usuario);
@@ -500,14 +501,25 @@ public class SubscriptionService {
         }
 
         @Transactional
-        public void processSubscriptionPayment(Long empresaId, Long veterinarioId, Long planId, String mpPaymentId) {
+        public void processSubscriptionPayment(Long empresaId, Long veterinarioId, Long usuarioId, Long planId,
+                        String mpPaymentId) {
+                // El checkout de un CLIENTE solo manda usuario_id; antes este metodo lo ignoraba, caia en
+                // veterinarioRepository.findById(null) y el pago aprobado nunca activaba el plan.
+                if (empresaId == null && veterinarioId == null && usuarioId == null) {
+                        throw new com.vet_saas.core.exceptions.types.BusinessException(
+                                        "El pago de suscripción " + mpPaymentId
+                                                        + " no indica a quién pertenece (empresa_id, veterinario_id o usuario_id).");
+                }
+
                 // Verificar si este pago ya fue procesado (Idempotencia)
                 Suscripcion suscripcionExistente;
 
                 if (empresaId != null) {
                         suscripcionExistente = getSuscripcionByEmpresa(empresaId);
-                } else {
+                } else if (veterinarioId != null) {
                         suscripcionExistente = getSuscripcionByVeterinario(veterinarioId);
+                } else {
+                        suscripcionExistente = suscripcionRepository.findByUsuarioId(usuarioId).orElse(null);
                 }
 
                 if (suscripcionExistente != null && suscripcionExistente.getMpPreapprovalId() != null &&
@@ -530,7 +542,7 @@ public class SubscriptionService {
                                                         .empresa(empresa)
                                                         .fechaInicio(LocalDateTime.now())
                                                         .build());
-                } else {
+                } else if (veterinarioId != null) {
                         com.vet_saas.modules.veterinarian.model.Veterinario vet = veterinarioRepository
                                         .findById(veterinarioId)
                                         .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
@@ -538,6 +550,15 @@ public class SubscriptionService {
                         suscripcion = suscripcionRepository.findByVeterinarioId(veterinarioId)
                                         .orElseGet(() -> Suscripcion.builder()
                                                         .veterinario(vet)
+                                                        .fechaInicio(LocalDateTime.now())
+                                                        .build());
+                } else {
+                        com.vet_saas.modules.user.model.Usuario usuario = usuarioRepository.findById(usuarioId)
+                                        .orElseThrow(() -> new ResourceNotFoundException(
+                                                        "Usuario no encontrado con ID: " + usuarioId));
+                        suscripcion = suscripcionRepository.findByUsuarioId(usuarioId)
+                                        .orElseGet(() -> Suscripcion.builder()
+                                                        .usuario(usuario)
                                                         .fechaInicio(LocalDateTime.now())
                                                         .build());
                 }

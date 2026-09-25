@@ -24,6 +24,8 @@ import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,8 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+// Crear una cita o cambiar su estado invalida la cache del dashboard de empresas (TTL 2-3 min):
+// sin esto, justo despues de confirmar/rechazar el dashboard mostraba conteos viejos.
 public class CitaService {
 
     private final CitaRepository citaRepository;
@@ -49,6 +53,9 @@ public class CitaService {
     private final PasswordEncoder passwordEncoder;
     private final HorarioAtencionRepository horarioAtencionRepository;
 
+    @Caching(evict = {
+            @CacheEvict(value = "dashboardMetrics", allEntries = true),
+            @CacheEvict(value = "dashboardActivity", allEntries = true)})
     @Transactional
     public CitaResponse crearCita(Usuario cliente, CitaRequest request) {
         Mascota mascota = null;
@@ -98,6 +105,9 @@ public class CitaService {
         return CitaResponse.fromEntity(citaRepository.save(cita));
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "dashboardMetrics", allEntries = true),
+            @CacheEvict(value = "dashboardActivity", allEntries = true)})
     @Transactional
     public CitaResponse crearCitaParaCliente(Usuario empresaUsuario, CrearCitaEmpresaRequest request) {
         Empresa empresa = empresaRepository.findByUsuarioPropietarioId(empresaUsuario.getId())
@@ -201,6 +211,9 @@ public class CitaService {
                 .collect(Collectors.toList());
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "dashboardMetrics", allEntries = true),
+            @CacheEvict(value = "dashboardActivity", allEntries = true)})
     @Transactional
     public CitaResponse actualizarEstado(Long citaId, AppointmentStatus nuevoEstado, String notasInternas) {
         Cita cita = citaRepository.findById(citaId)

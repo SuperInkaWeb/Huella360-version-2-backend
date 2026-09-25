@@ -316,9 +316,13 @@ public class PaymentService {
         Long veterinarioId = metadata.containsKey("veterinario_id")
                 ? Double.valueOf(metadata.get("veterinario_id").toString()).longValue()
                 : null;
+        Long usuarioId = metadata.containsKey("usuario_id")
+                ? Double.valueOf(metadata.get("usuario_id").toString()).longValue()
+                : null;
         Long planId = Double.valueOf(metadata.get("plan_id").toString()).longValue();
 
-        subscriptionService.processSubscriptionPayment(empresaId, veterinarioId, planId, payment.getId().toString());
+        subscriptionService.processSubscriptionPayment(empresaId, veterinarioId, usuarioId, planId,
+                payment.getId().toString());
     }
 
     private void handleOrderWebhook(Payment payment, Map<String, Object> metadata, String pathEmpresaId) {
