@@ -1,6 +1,9 @@
 spring:
   application:
     name: vet-saas
+  jackson:
+    # Misma zona que la JVM (ver VetSaasApplication.configurarZonaHoraria)
+    time-zone: ${APP_TIMEZONE:America/Lima}
   profiles:
     active: dev
 
