@@ -387,6 +387,13 @@ public class SubscriptionService {
                 if ("CLIENTE".equals(usuario.getRol().name())) {
                         sub = suscripcionRepository.findByUsuarioId(usuario.getId()).orElse(null);
                         petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+                } else if ("VETERINARIO".equals(usuario.getRol().name())) {
+                        // Antes caia en la rama de EMPRESA: un veterinario independiente no tiene empresa
+                        // y GET /subscriptions/usage/me respondia 404. No vende productos (quedan en 0).
+                        com.vet_saas.modules.veterinarian.model.Veterinario vet = getVeterinarioFromUsuario(usuario);
+                        sub = suscripcionRepository.findByVeterinarioId(vet.getId()).orElse(null);
+                        petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+                        serviceCount = servicioRepository.countByVeterinarioIdAndActivoTrue(vet.getId());
                 } else {
                         Empresa empresa = getEmpresaFromUsuario(usuario);
                         sub = getSuscripcionByEmpresa(empresa.getId());
