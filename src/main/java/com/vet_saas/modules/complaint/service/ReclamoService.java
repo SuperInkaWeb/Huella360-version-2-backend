@@ -13,12 +13,12 @@ import com.vet_saas.modules.user.model.Usuario;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.Map;
 
@@ -32,17 +32,33 @@ public class ReclamoService {
     private final Cloudinary cloudinary;
     private final PdfService pdfService; // Inyectar el nuevo servicio de Jasper
 
-    @Transactional
-    public String registrarReclamo(Usuario usuario, ReclamoRequestDto dto, MultipartFile archivo) {
+    /** Resultado del registro: el numero siempre existe; la URL del PDF puede faltar si fallo su generacion. */
+    public record ResultadoReclamo(Long id, String numero, String pdfUrl) {}
+
+    public static String formatearNumero(Long id) {
+        return String.format("%06d", id);
+    }
+
+    /**
+     * Registra un reclamo del Libro de Reclamaciones. Puede llamarlo un usuario anonimo (usuario == null).
+     *
+     * El reclamo se guarda PRIMERO y ese guardado no depende de nada externo. Antes todo el metodo era
+     * una sola transaccion: si fallaba la subida del PDF a Cloudinary, se deshacia tambien el reclamo y el
+     * consumidor lo perdia. Ahora el PDF, su subida y los correos son pasos posteriores "best effort":
+     * si fallan se registra el error y el reclamo queda igual (visible para el admin en GET /reclamos).
+     */
+    public ResultadoReclamo registrarReclamo(Usuario usuario, ReclamoRequestDto dto, MultipartFile archivo) {
         String archivoUrl = null;
 
-        // 1. Subir archivo de sustento del cliente (Opcional)
+        // 1. Subir archivo de sustento del cliente (opcional). El SDK de Cloudinary acepta byte[], File o
+        //    String, NO InputStream ("Unrecognized file parameter"): antes esta subida fallaba siempre.
         if (archivo != null && !archivo.isEmpty()) {
-            try (InputStream inputStream = archivo.getInputStream()) {
-                Map<?, ?> uploadResult = cloudinary.uploader().upload(inputStream, ObjectUtils.emptyMap());
-                archivoUrl = uploadResult.get("url").toString();
+            try {
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(archivo.getBytes(),
+                        ObjectUtils.asMap("resource_type", "auto", "folder", "reclamos/adjuntos"));
+                archivoUrl = String.valueOf(uploadResult.get("secure_url"));
             } catch (Exception e) {
-                LOGGER.error("Error al subir archivo de sustento: {}", e.getMessage());
+                LOGGER.error("Error al subir archivo de sustento del reclamo: {}", e.getMessage(), e);
             }
         }
 
@@ -78,23 +94,43 @@ public class ReclamoService {
                 .build();
 
         reclamo = reclamoRepository.save(reclamo);
+        String numero = formatearNumero(reclamo.getId());
+        LOGGER.info("Reclamo N° {} registrado (usuario: {})", numero, usuario != null ? usuario.getId() : "anonimo");
 
-        // 3. Generar el PDF con JasperReports
-        byte[] pdfBytes = pdfService.generateReclamoPdf(dto, reclamo.getId());
+        // 3-5. PDF (JasperReports) + subida a Cloudinary + URL en la BD. Best effort.
+        String pdfUrl = null;
+        try {
+            byte[] pdfBytes = pdfService.generateReclamoPdf(dto, reclamo.getId());
+            pdfUrl = subirPdfACloudinary(pdfBytes, reclamo.getId());
+            reclamo.setPdfReclamoUrl(pdfUrl);
+            reclamoRepository.save(reclamo);
+            LOGGER.info("PDF del reclamo N° {} subido a Cloudinary: {}", numero, pdfUrl);
+        } catch (Exception e) {
+            LOGGER.error("Reclamo N° {} guardado, pero fallo la generacion/subida del PDF: {}", numero, e.getMessage(), e);
+        }
 
-        // 4. Subir el PDF generado a Cloudinary
-        String pdfUrl = subirPdfACloudinary(pdfBytes, reclamo.getId());
-        LOGGER.info("PDF subido exitosamente a Cloudinary: {}", pdfUrl);
+        // 6. Correo al consumidor + copia administrativa (ADMIN_EMAIL). Asincrono y best effort.
+        try {
+            String nombreCliente = dto.getPrimerNombre() + " " + dto.getPrimerApellido();
+            emailService.sendReclamoEmailConLink(dto.getCorreo(), nombreCliente, "Reclamo N° " + numero, pdfUrl);
+        } catch (Exception e) {
+            LOGGER.error("Reclamo N° {} guardado, pero no se pudo encolar el correo: {}", numero, e.getMessage(), e);
+        }
 
-        // 5. Actualizar base de datos con la URL en formato TEXT
-        reclamo.setPdfReclamoUrl(pdfUrl);
-        reclamo = reclamoRepository.save(reclamo);
+        return new ResultadoReclamo(reclamo.getId(), numero, pdfUrl);
+    }
 
-        // 6. Enviar Correo Electrónico pasándole la URL
-        String nombreCliente = dto.getPrimerNombre() + " " + dto.getPrimerApellido();
-        emailService.sendReclamoEmailConLink(dto.getCorreo(), nombreCliente, "Reclamo N° " + String.format("%06d", reclamo.getId()), pdfUrl);
+    @Transactional(readOnly = true)
+    public Page<Reclamo> listar(EstadoReclamo estado, Pageable pageable) {
+        return estado == null
+                ? reclamoRepository.findAllByOrderByFechaRegistroDesc(pageable)
+                : reclamoRepository.findByEstadoOrderByFechaRegistroDesc(estado, pageable);
+    }
 
-        return reclamo.getPdfReclamoUrl();
+    @Transactional(readOnly = true)
+    public Reclamo obtener(Long id) {
+        return reclamoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Reclamo", "id", id));
     }
 
     @Transactional
@@ -119,10 +155,8 @@ public class ReclamoService {
                     "flags", "attachment"
             );
 
-            Map<?, ?> uploadResult;
-            try (InputStream inputStream = new ByteArrayInputStream(pdfBytes)) {
-                uploadResult = cloudinary.uploader().upload(inputStream, options);
-            }
+            // byte[]: el SDK no acepta InputStream (ver registrarReclamo)
+            Map<?, ?> uploadResult = cloudinary.uploader().upload(pdfBytes, options);
             return uploadResult.get("secure_url").toString();
         } catch (Exception e) {
             LOGGER.error("Error al subir el PDF de reclamo a Cloudinary: {}", e.getMessage(), e);

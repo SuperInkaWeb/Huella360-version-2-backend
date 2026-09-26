@@ -20,23 +20,39 @@ public class WebhookOrchestrator {
 
     private final MercadoPagoGateway mpGateway;
     private final PaymentService paymentService;
+    private final WebhookEventService webhookEventService;
     private final AppProperties appProperties;
 
     @Async("webhookExecutor")
-    public void processWebhookAsync(String paymentId, String pathEmpresaId) {
+    public void processWebhookAsync(Long eventId, String paymentId, String pathEmpresaId) {
         LOGGER.info("Iniciando procesamiento asíncrono de webhook. paymentId: {}", paymentId);
+        process(eventId, paymentId, pathEmpresaId);
+    }
 
-        String tokenToUse = determineTokenToUse(pathEmpresaId);
+    /**
+     * Procesa un evento de webhook y deja constancia del resultado en webhook_events:
+     * COMPLETED si se aplico, FAILED (con backoff) si fallo, para que WebhookRetryScheduler
+     * lo reintente. Antes nadie actualizaba el estado y un fallo aqui perdia el pago:
+     * Mercado Pago ya habia recibido 200 y no reintenta.
+     */
+    public void process(Long eventId, String paymentId, String pathEmpresaId) {
+        try {
+            String tokenToUse = determineTokenToUse(pathEmpresaId);
 
-        Payment payment = mpGateway.getPaymentDetails(paymentId, tokenToUse);
-        Map<String, Object> metadata = payment.getMetadata();
+            Payment payment = mpGateway.getPaymentDetails(paymentId, tokenToUse);
+            Map<String, Object> metadata = payment.getMetadata();
 
-        if (metadata == null) {
-            LOGGER.error("El pago {} no contiene metadata", paymentId);
-            return;
+            if (metadata == null) {
+                throw new BusinessException("El pago " + paymentId + " no contiene metadata");
+            }
+
+            paymentService.processPaymentDatabaseTransaction(payment, metadata, pathEmpresaId);
+            webhookEventService.markCompleted(paymentId);
+            LOGGER.info("Webhook procesado. paymentId: {}", paymentId);
+        } catch (Exception ex) {
+            LOGGER.error("Error procesando webhook. eventId: {} paymentId: {}", eventId, paymentId, ex);
+            webhookEventService.markFailed(eventId, ex.getClass().getSimpleName() + ": " + ex.getMessage());
         }
-
-        paymentService.processPaymentDatabaseTransaction(payment, metadata, pathEmpresaId);
     }
 
     private String determineTokenToUse(String pathEmpresaId) {
