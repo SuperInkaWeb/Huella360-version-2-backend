@@ -8,11 +8,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class WebhookEventService {
+
+    /**
+     * El primer intento se hace en caliente (async) al recibir el webhook; el job de reintentos
+     * solo toma el evento si sigue PENDING pasado este margen (p. ej. el proceso murio a mitad),
+     * para no procesar el mismo evento dos veces en paralelo.
+     */
+    static final int INITIAL_RETRY_GRACE_MINUTES = 5;
 
     private final WebhookEventRepository webhookEventRepository;
 
@@ -25,9 +33,14 @@ public class WebhookEventService {
                 .attempts(0)
                 .maxAttempts(5)
                 .createdAt(LocalDateTime.now())
-                .nextRetryAt(LocalDateTime.now())
+                .nextRetryAt(LocalDateTime.now().plusMinutes(INITIAL_RETRY_GRACE_MINUTES))
                 .build();
         return webhookEventRepository.save(event);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WebhookEvent> findRetryableEvents() {
+        return webhookEventRepository.findRetryableEvents(LocalDateTime.now());
     }
 
     @Transactional

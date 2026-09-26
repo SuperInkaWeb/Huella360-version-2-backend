@@ -5,6 +5,9 @@ import com.vet_saas.modules.points.dto.ClientPointsDashboardDto;
 import com.vet_saas.modules.points.dto.PointsConfigDto;
 import com.vet_saas.modules.points.service.PointsConfigService;
 import com.vet_saas.modules.points.service.PointsService;
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
+import com.vet_saas.modules.client.model.PerfilCliente;
+import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
@@ -23,13 +26,14 @@ public class PointsController {
     private final PointsService pointsService;
     private final PointsConfigService configService;
     private final UsuarioService usuarioService;
+    private final ClienteRepository clienteRepository;
 
     // --- CLIENT ENDPOINTS ---
 
     @GetMapping("/dashboard")
     @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<ApiResponse<ClientPointsDashboardDto>> getMyPointsDashboard(Principal principal) {
-        Long idPerfil = getUsuarioId(principal);
+        Long idPerfil = getPerfilClienteId(principal);
         ClientPointsDashboardDto dashboard = pointsService.getClientDashboard(idPerfil);
         return ResponseEntity.ok(ApiResponse.success(dashboard, "Dashboard de puntos obtenido"));
     }
@@ -52,8 +56,13 @@ public class PointsController {
         return ResponseEntity.ok(ApiResponse.success(response, "Configuración actualizada correctamente"));
     }
 
-    private Long getUsuarioId(Principal principal) {
+    // Los puntos y canjes se guardan por id de PerfilCliente (PuntosCliente usa @MapsId del perfil),
+    // no por id de Usuario. Antes se pasaba usuario.getId(): el cliente veia 0 puntos y, cuando los
+    // ids coincidian con el perfil de otro cliente, veia y gastaba los puntos de esa otra persona.
+    private Long getPerfilClienteId(Principal principal) {
         Usuario usuario = usuarioService.findByCorreo(principal.getName());
-        return usuario.getId();
+        return clienteRepository.findByUsuarioId(usuario.getId())
+                .map(PerfilCliente::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "usuarioId", usuario.getId()));
     }
 }

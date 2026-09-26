@@ -6,7 +6,9 @@ import com.vet_saas.modules.company.service.EmpresaLookupService;
 import com.vet_saas.modules.subscription.model.EstadoSuscripcion;
 import com.vet_saas.modules.subscription.model.Plan;
 import com.vet_saas.modules.subscription.model.Suscripcion;
+import com.vet_saas.modules.subscription.model.SuscripcionPago;
 import com.vet_saas.modules.subscription.repository.PlanRepository;
+import com.vet_saas.modules.subscription.repository.SuscripcionPagoRepository;
 import com.vet_saas.modules.subscription.repository.SuscripcionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,7 @@ public class SubscriptionService {
         private final MercadoPagoGateway mercadoPagoGateway;
         private final com.vet_saas.config.AppProperties appProperties;
         private final IaUsageRepository iaUsageRepository;
+        private final SuscripcionPagoRepository suscripcionPagoRepository;
 
         private Empresa getEmpresaFromUsuario(com.vet_saas.modules.user.model.Usuario usuario) {
                 return empresaLookupService.getEmpresaFromUsuario(usuario);
@@ -487,7 +490,8 @@ public class SubscriptionService {
                 };
                 String successUrl = appProperties.getExternal().getFrontendUrl()
                                 + "/portal/" + portalPath + "/pago-exitoso";
-                String notificationUrl = appProperties.getExternal().getBackendUrl() + "/api/v1/payments/webhook";
+                // source_news=webhooks: solo notificaciones Webhook firmadas (sin IPN topic=payment/merchant_order)
+                String notificationUrl = appProperties.getExternal().getBackendUrl() + "/api/v1/payments/webhook?source_news=webhooks";
 
                 return mercadoPagoGateway.createPreference(
                                 appProperties.getExternal().getMercadoPago().getAccessToken(),
@@ -501,20 +505,23 @@ public class SubscriptionService {
 
         @Transactional
         public void processSubscriptionPayment(Long empresaId, Long veterinarioId, Long planId, String mpPaymentId) {
-                // Verificar si este pago ya fue procesado (Idempotencia)
-                Suscripcion suscripcionExistente;
-
-                if (empresaId != null) {
-                        suscripcionExistente = getSuscripcionByEmpresa(empresaId);
-                } else {
-                        suscripcionExistente = getSuscripcionByVeterinario(veterinarioId);
-                }
-
-                if (suscripcionExistente != null && suscripcionExistente.getMpPreapprovalId() != null &&
-                                suscripcionExistente.getMpPreapprovalId().equals(mpPaymentId)) {
-                        LOGGER.info("El pago {} ya fue procesado. Omitiendo.", mpPaymentId);
+                // Idempotencia: antes se comparaba mpPaymentId contra mp_preapproval_id, campo que
+                // nunca se guarda, asi que cada llegada del mismo pago (webhook, reintentos de
+                // Mercado Pago, GET /payments/sync) volvia a activar el plan y reiniciaba fecha_fin
+                // a hoy + 1 mes. Un pago aprobado una vez servia para renovar gratis indefinidamente.
+                if (suscripcionPagoRepository.existsByMpPaymentId(mpPaymentId)) {
+                        LOGGER.info("El pago {} ya fue aplicado a una suscripción. Omitiendo.", mpPaymentId);
                         return;
                 }
+                // Se registra primero y con flush: si el mismo pago se procesa en paralelo, la
+                // restriccion UNIQUE de mp_payment_id hace fallar a la segunda transaccion antes
+                // de que toque la suscripcion.
+                suscripcionPagoRepository.saveAndFlush(SuscripcionPago.builder()
+                                .mpPaymentId(mpPaymentId)
+                                .empresaId(empresaId)
+                                .veterinarioId(veterinarioId)
+                                .planId(planId)
+                                .build());
 
                 LOGGER.info("Procesando pago de suscripción al plan {}. PaymentId: {}", planId, mpPaymentId);
 
