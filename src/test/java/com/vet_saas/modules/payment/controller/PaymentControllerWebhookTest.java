@@ -2,6 +2,7 @@ package com.vet_saas.modules.payment.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vet_saas.config.AppProperties;
+import com.vet_saas.modules.payment.model.WebhookEvent;
 import com.vet_saas.modules.payment.service.MercadoPagoWebhookSignatureValidator;
 import com.vet_saas.modules.payment.service.PaymentService;
 import com.vet_saas.modules.payment.service.WebhookEventService;
@@ -89,13 +90,14 @@ class PaymentControllerWebhookTest {
     @Test
     void dataIdEnQuery_yHeadersValidos_seAceptaYContinuaElProcesamiento() throws Exception {
         Map<String, String> query = Map.of("data.id", "180663306524", "type", "payment");
+        when(webhookEventService.saveEvent("180663306524", null)).thenReturn(WebhookEvent.builder().id(11L).build());
 
         ResponseEntity<Void> r = controller.receivePlatformWebhook(query, body("180663306524"),
                 request(firmaValida("180663306524"), REQUEST_ID));
 
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(webhookEventService).saveEvent("180663306524", null);
-        verify(webhookOrchestrator).processWebhookAsync("180663306524", null);
+        verify(webhookOrchestrator).processWebhookAsync(11L, "180663306524", null);
     }
 
     @Test
@@ -103,25 +105,27 @@ class PaymentControllerWebhookTest {
         // La firma se calcula con el data.id del body: si el controller no usara el fallback,
         // el manifiesto no tendria "id:..." y la firma no coincidiria (503).
         Map<String, String> query = Map.of("type", "payment");
+        when(webhookEventService.saveEvent("777000111", null)).thenReturn(WebhookEvent.builder().id(12L).build());
 
         ResponseEntity<Void> r = controller.receivePlatformWebhook(query, body("777000111"),
                 request(firmaValida("777000111"), REQUEST_ID));
 
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(webhookEventService).saveEvent("777000111", null);
-        verify(webhookOrchestrator).processWebhookAsync("777000111", null);
+        verify(webhookOrchestrator).processWebhookAsync(12L, "777000111", null);
     }
 
     @Test
     void endpointPorEmpresa_conFirmaValida_procesaConElEmpresaIdDelPath() throws Exception {
         Map<String, String> query = Map.of("data.id", "555", "type", "payment");
+        when(webhookEventService.saveEvent("555", "3")).thenReturn(WebhookEvent.builder().id(13L).build());
 
         ResponseEntity<Void> r = controller.receiveWebhook("3", query, body("555"),
                 request(firmaValida("555"), REQUEST_ID));
 
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(webhookEventService).saveEvent("555", "3");
-        verify(webhookOrchestrator).processWebhookAsync("555", "3");
+        verify(webhookOrchestrator).processWebhookAsync(13L, "555", "3");
     }
 
     // --- rechazados ----------------------------------------------------------------------------
