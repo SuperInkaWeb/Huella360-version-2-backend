@@ -47,6 +47,7 @@ public class SubscriptionService {
         private final com.vet_saas.config.AppProperties appProperties;
         private final IaUsageRepository iaUsageRepository;
         private final SuscripcionPagoRepository suscripcionPagoRepository;
+        private final com.vet_saas.modules.user.repository.UsuarioRepository usuarioRepository;
 
         private Empresa getEmpresaFromUsuario(com.vet_saas.modules.user.model.Usuario usuario) {
                 return empresaLookupService.getEmpresaFromUsuario(usuario);
@@ -504,7 +505,16 @@ public class SubscriptionService {
         }
 
         @Transactional
-        public void processSubscriptionPayment(Long empresaId, Long veterinarioId, Long planId, String mpPaymentId) {
+        public void processSubscriptionPayment(Long empresaId, Long veterinarioId, Long usuarioId, Long planId,
+                        String mpPaymentId) {
+                // El checkout de un CLIENTE solo manda usuario_id; antes este metodo lo ignoraba, caia en
+                // veterinarioRepository.findById(null) y el pago aprobado nunca activaba el plan.
+                if (empresaId == null && veterinarioId == null && usuarioId == null) {
+                        throw new com.vet_saas.core.exceptions.types.BusinessException(
+                                        "El pago de suscripción " + mpPaymentId
+                                                        + " no indica a quién pertenece (empresa_id, veterinario_id o usuario_id).");
+                }
+
                 // Idempotencia: antes se comparaba mpPaymentId contra mp_preapproval_id, campo que
                 // nunca se guarda, asi que cada llegada del mismo pago (webhook, reintentos de
                 // Mercado Pago, GET /payments/sync) volvia a activar el plan y reiniciaba fecha_fin
@@ -515,7 +525,8 @@ public class SubscriptionService {
                 }
                 // Se registra primero y con flush: si el mismo pago se procesa en paralelo, la
                 // restriccion UNIQUE de mp_payment_id hace fallar a la segunda transaccion antes
-                // de que toque la suscripcion.
+                // de que toque la suscripcion. En el pago de un CLIENTE empresa_id y veterinario_id
+                // quedan en NULL (la tabla no tiene columna de usuario).
                 suscripcionPagoRepository.saveAndFlush(SuscripcionPago.builder()
                                 .mpPaymentId(mpPaymentId)
                                 .empresaId(empresaId)
@@ -537,7 +548,7 @@ public class SubscriptionService {
                                                         .empresa(empresa)
                                                         .fechaInicio(LocalDateTime.now())
                                                         .build());
-                } else {
+                } else if (veterinarioId != null) {
                         com.vet_saas.modules.veterinarian.model.Veterinario vet = veterinarioRepository
                                         .findById(veterinarioId)
                                         .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
@@ -545,6 +556,15 @@ public class SubscriptionService {
                         suscripcion = suscripcionRepository.findByVeterinarioId(veterinarioId)
                                         .orElseGet(() -> Suscripcion.builder()
                                                         .veterinario(vet)
+                                                        .fechaInicio(LocalDateTime.now())
+                                                        .build());
+                } else {
+                        com.vet_saas.modules.user.model.Usuario usuario = usuarioRepository.findById(usuarioId)
+                                        .orElseThrow(() -> new ResourceNotFoundException(
+                                                        "Usuario no encontrado con ID: " + usuarioId));
+                        suscripcion = suscripcionRepository.findByUsuarioId(usuarioId)
+                                        .orElseGet(() -> Suscripcion.builder()
+                                                        .usuario(usuario)
                                                         .fechaInicio(LocalDateTime.now())
                                                         .build());
                 }
