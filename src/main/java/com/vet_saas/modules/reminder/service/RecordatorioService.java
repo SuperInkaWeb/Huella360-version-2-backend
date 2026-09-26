@@ -17,7 +17,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -88,8 +90,11 @@ public class RecordatorioService {
     @Scheduled(cron = "0 0 8 * * *") // Every day at 8am
     @Transactional
     public void sendPendingReminders() {
-        LocalDateTime now = LocalDateTime.now();
-        List<Recordatorio> pending = recordatorioRepository.findByEnviadoFalseAndActivoTrueAndFechaProgramadaLessThanEqual(now);
+        // El job corre una vez al dia a las 8:00: se envian los recordatorios de HOY (y los atrasados).
+        // Antes se comparaba contra "ahora" (8:00), asi que una vacuna programada a las 10:30 se avisaba
+        // al dia siguiente, despues de la cita.
+        LocalDateTime finDelDia = LocalDate.now().atTime(LocalTime.MAX);
+        List<Recordatorio> pending = recordatorioRepository.findByEnviadoFalseAndActivoTrueAndFechaProgramadaLessThanEqual(finDelDia);
 
         for (Recordatorio recordatorio : pending) {
             try {

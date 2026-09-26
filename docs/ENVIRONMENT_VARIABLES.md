@@ -12,6 +12,7 @@ Este documento lista todas las variables de entorno necesarias para configurar y
 | `JWT_SECRET` | Clave secreta para firmar tokens JWT | `[Cadena de 64 caracteres]` |
 | `APP_ENCRYPTION_SECRET` | Clave para cifrado de datos sensibles | `[Cadena secreta]` |
 | `ALLOWED_ORIGINS` | Orígenes permitidos por CORS | `http://localhost:5173,https://huella360.com` |
+| `APP_TIMEZONE` | Zona horaria del negocio. Opcional, default `America/Lima`. Se aplica a la JVM al arrancar: horas guardadas y mostradas, `LocalDateTime.now()` y jobs `@Scheduled` | `America/Lima` |
 
 ## 🚀 URLs de la Aplicación
 
