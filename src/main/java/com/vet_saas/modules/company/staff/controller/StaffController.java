@@ -59,7 +59,10 @@ public class StaffController {
                 .body(ApiResponse.success(response, "Invitación enviada al veterinario"));
     }
 
+    // Las invitaciones las consulta y responde el VETERINARIO invitado: el @PreAuthorize de la clase
+    // (EMPRESA) le devolvia 403 y el portal del veterinario mostraba "Acceso Denegado" al entrar.
     @GetMapping("/invitations")
+    @PreAuthorize("hasRole('VETERINARIO')")
     public ResponseEntity<ApiResponse<List<StaffResponse>>> getMyInvitations(
             @AuthenticationPrincipal Usuario usuario
     ) {
@@ -70,6 +73,7 @@ public class StaffController {
     }
 
     @PutMapping("/invitations/{staffId}/accept")
+    @PreAuthorize("hasRole('VETERINARIO')")
     public ResponseEntity<ApiResponse<Void>> acceptInvitation(
             @AuthenticationPrincipal Usuario usuario,
             @PathVariable Long staffId
@@ -79,6 +83,7 @@ public class StaffController {
     }
 
     @PutMapping("/invitations/{staffId}/reject")
+    @PreAuthorize("hasRole('VETERINARIO')")
     public ResponseEntity<ApiResponse<Void>> rejectInvitation(
             @AuthenticationPrincipal Usuario usuario,
             @PathVariable Long staffId
