@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
@@ -218,16 +219,21 @@ public class EmailService {
     @Async("mailExecutor")
     public void sendReclamoEmailConLink(String emailDestino, String nombreCliente, String numeroReclamo, String pdfUrl) {
         try {
-            // Construimos un diseño HTML limpio y profesional con el botón dinámico hacia Cloudinary
+            // El nombre lo escribe el consumidor en un formulario publico: se escapa antes de insertarlo en el HTML.
+            String nombreSeguro = HtmlUtils.htmlEscape(nombreCliente);
+            // Si fallo la generacion del PDF, el reclamo igual quedo registrado: se envia el correo sin el boton.
+            String bloquePdf = (pdfUrl != null && !pdfUrl.isBlank())
+                    ? "<p>Conforme a la normativa de protección al consumidor, adjuntamos el acceso directo para visualizar, guardar o descargar la copia electrónica oficial de su hoja de reclamación:</p>" +
+                      "<div style='margin: 25px 0;'>" +
+                      "  <a href='" + HtmlUtils.htmlEscape(pdfUrl) + "' target='_blank' style='background-color: #1ea59c; color: white; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;'>" +
+                      "    Ver Hoja de Reclamación (PDF)" +
+                      "  </a>" +
+                      "</div>"
+                    : "<p>La copia electrónica de su hoja de reclamación se le enviará por este medio a la brevedad.</p>";
             String htmlContent = "<h2>Libro de Reclamaciones Virtual</h2>" +
-                    "<p>Estimado(a) <strong>" + nombreCliente + "</strong>,</p>" +
+                    "<p>Estimado(a) <strong>" + nombreSeguro + "</strong>,</p>" +
                     "<p>Le informamos que su solicitud en nuestro Libro de Reclamaciones ha sido registrada correctamente bajo el identificador: <strong>" + numeroReclamo + "</strong>.</p>" +
-                    "<p>Conforme a la normativa de protección al consumidor, adjuntamos el acceso directo para visualizar, guardar o descargar la copia electrónica oficial de su hoja de reclamación:</p>" +
-                    "<div style='margin: 25px 0;'>" +
-                    "  <a href='" + pdfUrl + "' target='_blank' style='background-color: #1ea59c; color: white; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;'>" +
-                    "    Ver Hoja de Reclamación (PDF)" +
-                    "  </a>" +
-                    "</div>" +
+                    bloquePdf +
                     "<p style='font-size: 12px; color: #666;'>De acuerdo a Ley, daremos respuesta formal a su requerimiento dentro del plazo establecido de quince (15) días hábiles.</p>" +
                     "<hr style='border: 0; border-top: 1px solid #eee; margin-top: 30px;'>" +
                     "<p style='font-size: 11px; color: #999;'>Este es un correo automático de notificación enviado por el sistema, por favor no responda a esta dirección.</p>";
@@ -237,7 +243,7 @@ public class EmailService {
 
             // 2. Envio de copia administrativa a tu cuenta Sandbox autorizada de Resend
             String adminEmail = appProperties.getNotification().getAdminEmail();
-            sendEmail(adminEmail, "Copia Administrativa: " + numeroReclamo + " - " + nombreCliente, htmlContent);
+            sendEmail(adminEmail, "Copia Administrativa: " + numeroReclamo + " - " + nombreSeguro, htmlContent);
 
         } catch (Exception ex) {
             LOGGER.error("Error al preparar el correo electrónico del reclamo dinámico: {}", ex.getMessage(), ex);

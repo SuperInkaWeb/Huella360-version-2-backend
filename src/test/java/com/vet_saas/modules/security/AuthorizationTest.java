@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -55,11 +54,19 @@ class AuthorizationTest extends AbstractIntegrationTest {
     // 401: Todos los endpoints protegidos rechazan requests sin token
     // ====================================================================
 
+    // Libro de Reclamaciones (Ley 29571): registrar un reclamo es publico, no exige cuenta.
+    // Sin la parte 'reclamo' responde 400 (validacion), nunca 401.
     @Test
-    void reclamos_returns401_withoutAuth() throws Exception {
+    void reclamos_post_isPublic_returns400_withoutBody() throws Exception {
         clearAuth();
-        mockMvc.perform(post("/api/v1/reclamos")
-                        .contentType(MediaType.MULTIPART_FORM_DATA))
+        mockMvc.perform(multipart("/api/v1/reclamos"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void reclamos_list_returns401_withoutAuth() throws Exception {
+        clearAuth();
+        mockMvc.perform(get("/api/v1/reclamos"))
                 .andExpect(status().isUnauthorized());
     }
 

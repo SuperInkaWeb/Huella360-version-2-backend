@@ -11,7 +11,9 @@ import com.vet_saas.modules.payment.gateway.MercadoPagoGateway;
 import com.vet_saas.modules.subscription.model.EstadoSuscripcion;
 import com.vet_saas.modules.subscription.model.Plan;
 import com.vet_saas.modules.subscription.model.Suscripcion;
+import com.vet_saas.modules.subscription.model.SuscripcionPago;
 import com.vet_saas.modules.subscription.repository.PlanRepository;
+import com.vet_saas.modules.subscription.repository.SuscripcionPagoRepository;
 import com.vet_saas.modules.subscription.repository.SuscripcionRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
@@ -30,6 +32,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 /**
@@ -53,6 +56,7 @@ class SubscriptionServiceTest {
     @Mock private MercadoPagoGateway mercadoPagoGateway;
     @Mock private com.vet_saas.config.AppProperties appProperties;
     @Mock private IaUsageRepository iaUsageRepository;
+    @Mock private SuscripcionPagoRepository suscripcionPagoRepository;
     @Mock private UsuarioRepository usuarioRepository;
 
     private SubscriptionService subscriptionService;
@@ -65,7 +69,7 @@ class SubscriptionServiceTest {
         subscriptionService = new SubscriptionService(
                 suscripcionRepository, planRepository, productoRepository, empresaLookupService,
                 veterinarioRepository, mascotaRepository, servicioRepository, mercadoPagoGateway,
-                appProperties, iaUsageRepository, usuarioRepository);
+                appProperties, iaUsageRepository, suscripcionPagoRepository, usuarioRepository);
 
         planGratuito = Plan.builder()
                 .id(7L).nombre("Huella Free B2B").precioMensual(BigDecimal.ZERO)
@@ -176,6 +180,9 @@ class SubscriptionServiceTest {
 
         subscriptionService.processSubscriptionPayment(null, null, 11L, 5L, "179000000001");
 
+        verify(suscripcionPagoRepository).saveAndFlush(argThat((SuscripcionPago p) ->
+                "179000000001".equals(p.getMpPaymentId()) && p.getEmpresaId() == null
+                        && p.getVeterinarioId() == null && p.getPlanId() == 5L));
         ArgumentCaptor<Suscripcion> captor = ArgumentCaptor.forClass(Suscripcion.class);
         verify(suscripcionRepository).save(captor.capture());
         Suscripcion guardada = captor.getValue();
@@ -211,6 +218,80 @@ class SubscriptionServiceTest {
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> subscriptionService.processSubscriptionPayment(null, null, null, 5L, "179000000003"));
         assertTrue(ex.getMessage().contains("179000000003"));
+        verify(suscripcionPagoRepository, never()).saveAndFlush(any());
         verify(suscripcionRepository, never()).save(any());
+    }
+
+    @Test
+    void processSubscriptionPayment_veterinario_activaPlanEnSuSuscripcion() {
+        Veterinario veterinario = Veterinario.builder().id(6L).build();
+        Suscripcion subActual = Suscripcion.builder().id(12L).veterinario(veterinario).plan(planGratuito)
+                .estado(EstadoSuscripcion.ACTIVA).build();
+
+        when(planRepository.findById(8L)).thenReturn(Optional.of(planPago));
+        when(veterinarioRepository.findById(6L)).thenReturn(Optional.of(veterinario));
+        when(suscripcionRepository.findByVeterinarioId(6L)).thenReturn(Optional.of(subActual));
+
+        subscriptionService.processSubscriptionPayment(null, 6L, null, 8L, "179000000004");
+
+        verify(suscripcionPagoRepository).saveAndFlush(argThat((SuscripcionPago p) ->
+                "179000000004".equals(p.getMpPaymentId()) && p.getVeterinarioId() == 6L && p.getEmpresaId() == null));
+        verify(suscripcionRepository).save(subActual);
+        assertEquals(planPago, subActual.getPlan());
+        assertEquals(EstadoSuscripcion.ACTIVA, subActual.getEstado());
+        verify(usuarioRepository, never()).findById(any());
+    }
+
+    // --- H360-PAY: idempotencia de processSubscriptionPayment ---
+    // Antes se comparaba el paymentId contra mp_preapproval_id (nunca se guarda), asi que el
+    // mismo pago aprobado podia reenviarse (GET /payments/sync, reintentos de Mercado Pago) y
+    // cada vez reiniciaba fecha_fin a hoy + 1 mes: renovacion gratis indefinida.
+
+    @Test
+    void processSubscriptionPayment_pagoNuevo_activaPlanYRegistraElPago() {
+        Empresa empresa = Empresa.builder().id(3L).build();
+        Suscripcion subActual = Suscripcion.builder().id(30L).empresa(empresa)
+                .plan(planGratuito).estado(EstadoSuscripcion.ACTIVA).build();
+        when(suscripcionPagoRepository.existsByMpPaymentId("180663306524")).thenReturn(false);
+        when(planRepository.findById(8L)).thenReturn(Optional.of(planPago));
+        when(empresaLookupService.getEmpresaById(3L)).thenReturn(empresa);
+        when(suscripcionRepository.findByEmpresaId(3L)).thenReturn(Optional.of(subActual));
+
+        subscriptionService.processSubscriptionPayment(3L, null, null, 8L, "180663306524");
+
+        verify(suscripcionPagoRepository).saveAndFlush(argThat((SuscripcionPago p) ->
+                "180663306524".equals(p.getMpPaymentId()) && p.getEmpresaId() == 3L && p.getPlanId() == 8L));
+        verify(suscripcionRepository).save(subActual);
+        assertEquals(planPago, subActual.getPlan());
+        assertEquals(EstadoSuscripcion.ACTIVA, subActual.getEstado());
+        assertNotNull(subActual.getFechaFin());
+    }
+
+    @Test
+    void processSubscriptionPayment_pagoYaAplicado_noTocaLaSuscripcion() {
+        when(suscripcionPagoRepository.existsByMpPaymentId("180663306524")).thenReturn(true);
+
+        subscriptionService.processSubscriptionPayment(3L, null, null, 8L, "180663306524");
+
+        verify(suscripcionPagoRepository, never()).saveAndFlush(any());
+        verify(suscripcionRepository, never()).save(any());
+        verifyNoInteractions(planRepository, empresaLookupService);
+    }
+
+    @Test
+    void processSubscriptionPayment_registraElPagoAntesDeTocarLaSuscripcion() {
+        // Si el mismo pago llega en paralelo, la restriccion UNIQUE debe cortar a la segunda
+        // transaccion antes de modificar la suscripcion: el registro va primero.
+        Empresa empresa = Empresa.builder().id(3L).build();
+        when(suscripcionPagoRepository.existsByMpPaymentId("1")).thenReturn(false);
+        when(planRepository.findById(8L)).thenReturn(Optional.of(planPago));
+        when(empresaLookupService.getEmpresaById(3L)).thenReturn(empresa);
+        when(suscripcionRepository.findByEmpresaId(3L)).thenReturn(Optional.empty());
+
+        subscriptionService.processSubscriptionPayment(3L, null, null, 8L, "1");
+
+        var inOrder = inOrder(suscripcionPagoRepository, suscripcionRepository);
+        inOrder.verify(suscripcionPagoRepository).saveAndFlush(any());
+        inOrder.verify(suscripcionRepository).save(any());
     }
 }
