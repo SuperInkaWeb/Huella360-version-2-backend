@@ -33,6 +33,9 @@ public class ReclamoResponse {
     private String nombreProducto;
     private String tipoReclamo;
     private String resumen;
+    private String detallePedido;
+    private String estado;
+    private String notasInternas;
     private String archivoAdjuntoUrl;
     private String pdfReclamoUrl;
     private LocalDateTime fechaRegistro;
@@ -59,6 +62,9 @@ public class ReclamoResponse {
                 .nombreProducto(reclamo.getNombreProducto())
                 .tipoReclamo(reclamo.getTipoReclamo())
                 .resumen(reclamo.getResumen())
+                .detallePedido(reclamo.getDetallePedido())
+                .estado(reclamo.getEstado() != null ? reclamo.getEstado().name() : null)
+                .notasInternas(reclamo.getNotasInternas())
                 .archivoAdjuntoUrl(reclamo.getArchivoAdjuntoUrl())
                 .pdfReclamoUrl(reclamo.getPdfReclamoUrl())
                 .fechaRegistro(reclamo.getFechaRegistro())
