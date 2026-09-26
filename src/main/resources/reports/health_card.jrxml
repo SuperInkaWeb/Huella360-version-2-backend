@@ -1,139 +1,82 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports
-              http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
-              name="health_card" pageWidth="595" pageHeight="842"
-              columnWidth="555" leftMargin="20" rightMargin="20"
-              topMargin="20" bottomMargin="20">
-
-    <title>
-        <band height="50">
-            <staticText>
-                <reportElement x="0" y="0" width="555" height="40"/>
-                <textElement textAlignment="Center">
-                    <font size="20" isBold="true"/>
-                </textElement>
-                <text><![CDATA[Carnet de Salud]]></text>
-            </staticText>
-        </band>
-    </title>
-
-    <detail>
-        <band height="200">
-            <staticText>
-                <reportElement x="0" y="0" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Nombre:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="0" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{nombreMascota}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="0" y="25" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Especie:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="25" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{especie}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="0" y="50" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Raza:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="50" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{raza}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="0" y="75" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Sexo:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="75" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{sexo}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="0" y="100" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Peso:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="100" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{peso}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="0" y="125" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Fecha de Nacimiento:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="125" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{fechaNacimiento}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="0" y="150" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Esterilizado:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="150" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{esterilizado}]]></textFieldExpression>
-            </textField>
-
-            <staticText>
-                <reportElement x="0" y="175" width="150" height="20"/>
-                <textElement><font isBold="true"/></textElement>
-                <text><![CDATA[Observaciones:]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="150" y="175" width="400" height="20"/>
-                <textFieldExpression><![CDATA[$P{observaciones}]]></textFieldExpression>
-            </textField>
-        </band>
-    </detail>
-
-    <summary>
-        <band height="150">
-            <staticText>
-                <reportElement x="0" y="0" width="555" height="25"/>
-                <textElement textAlignment="Center">
-                    <font size="14" isBold="true"/>
-                </textElement>
-                <text><![CDATA[Historial Clínico (Últimos 5 registros)]]></text>
-            </staticText>
-            <textField isStretchWithOverflow="true">
-                <reportElement x="0" y="30" width="555" height="100"/>
-                <textElement>
-                    <font size="10"/>
-                </textElement>
-                <textFieldExpression><![CDATA[$P{historialClinico}]]></textFieldExpression>
-            </textField>
-            <staticText>
-                <reportElement x="0" y="135" width="555" height="15"/>
-                <textElement textAlignment="Right">
-                    <font size="8" isItalic="true"/>
-                </textElement>
-                <text><![CDATA[Fecha de emisión: ]]></text>
-            </staticText>
-            <textField>
-                <reportElement x="400" y="135" width="155" height="15"/>
-                <textElement textAlignment="Right">
-                    <font size="8" isItalic="true"/>
-                </textElement>
-                <textFieldExpression><![CDATA[$P{fechaEmision}]]></textFieldExpression>
-            </textField>
-        </band>
-    </summary>
-
+<!-- Formato JasperReports 7 (jasperreports 7.0.6 en pom.xml): no usar la sintaxis de Jasper 6 (<reportElement>, <textElement>, <band> en title/summary) -->
+<jasperReport name="health_card" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="6f1c2a4e-3b7d-4c9a-9e51-2d8f0b7a4c13">
+	<parameter name="nombreMascota" class="java.lang.String"/>
+	<parameter name="especie" class="java.lang.String"/>
+	<parameter name="raza" class="java.lang.String"/>
+	<parameter name="sexo" class="java.lang.String"/>
+	<parameter name="peso" class="java.lang.String"/>
+	<parameter name="fechaNacimiento" class="java.lang.String"/>
+	<parameter name="esterilizado" class="java.lang.String"/>
+	<parameter name="observaciones" class="java.lang.String"/>
+	<parameter name="historialClinico" class="java.lang.String"/>
+	<parameter name="fechaEmision" class="java.lang.String"/>
+	<title height="50">
+		<element kind="staticText" uuid="0a6e7d1b-5c2f-4e8a-b3d9-71f4c2e8a901" x="0" y="0" width="555" height="40" fontName="Arial" fontSize="20.0" bold="true" hTextAlign="Center" vTextAlign="Middle">
+			<text><![CDATA[Carnet de Salud]]></text>
+		</element>
+	</title>
+	<detail>
+		<band height="200">
+			<element kind="staticText" uuid="1b7f8e2c-6d3a-4f9b-a4e1-82a5d3f9b012" x="0" y="0" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Nombre:]]></text>
+			</element>
+			<element kind="textField" uuid="2c8a9f3d-7e4b-4a1c-b5f2-93b6e4a1c123" x="150" y="0" width="405" height="20" fontName="Arial">
+				<expression><![CDATA[$P{nombreMascota}]]></expression>
+			</element>
+			<element kind="staticText" uuid="3d9b1a4e-8f5c-4b2d-86a3-a4c7f5b2d234" x="0" y="25" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Especie:]]></text>
+			</element>
+			<element kind="textField" uuid="4e1c2b5f-9a6d-4c3e-97b4-b5d8a6c3e345" x="150" y="25" width="405" height="20" fontName="Arial">
+				<expression><![CDATA[$P{especie}]]></expression>
+			</element>
+			<element kind="staticText" uuid="5f2d3c6a-1b7e-4d4f-a8c5-c6e9b7d4f456" x="0" y="50" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Raza:]]></text>
+			</element>
+			<element kind="textField" uuid="6a3e4d7b-2c8f-4e5a-b9d6-d7fac8e5a567" x="150" y="50" width="405" height="20" fontName="Arial">
+				<expression><![CDATA[$P{raza}]]></expression>
+			</element>
+			<element kind="staticText" uuid="7b4f5e8c-3d9a-4f6b-8ae7-e81bd9f6b678" x="0" y="75" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Sexo:]]></text>
+			</element>
+			<element kind="textField" uuid="8c5a6f9d-4e1b-4a7c-9bf8-f92cea1c7789" x="150" y="75" width="405" height="20" fontName="Arial">
+				<expression><![CDATA[$P{sexo}]]></expression>
+			</element>
+			<element kind="staticText" uuid="9d6b7a1e-5f2c-4b8d-acf9-1a3dfb2d8890" x="0" y="100" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Peso:]]></text>
+			</element>
+			<element kind="textField" uuid="ae7c8b2f-6a3d-4c9e-bd1a-2b4eac3e99a1" x="150" y="100" width="405" height="20" fontName="Arial">
+				<expression><![CDATA[$P{peso}]]></expression>
+			</element>
+			<element kind="staticText" uuid="bf8d9c3a-7b4e-4d1f-8e2b-3c5fbd4faab2" x="0" y="125" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Fecha de Nacimiento:]]></text>
+			</element>
+			<element kind="textField" uuid="c19ead4b-8c5f-4e2a-9f3c-4d6ace5abbc3" x="150" y="125" width="405" height="20" fontName="Arial">
+				<expression><![CDATA[$P{fechaNacimiento}]]></expression>
+			</element>
+			<element kind="staticText" uuid="d2a1fe5c-9d6a-4f3b-a14d-5e7bdf6bccd4" x="0" y="150" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Esterilizado:]]></text>
+			</element>
+			<element kind="textField" uuid="e3b2af6d-1e7b-4a4c-b25e-6f8cea7cdde5" x="150" y="150" width="405" height="20" fontName="Arial">
+				<expression><![CDATA[$P{esterilizado}]]></expression>
+			</element>
+			<element kind="staticText" uuid="f4c3ba7e-2f8c-4b5d-836f-7a9dfb8deef6" x="0" y="175" width="150" height="20" fontName="Arial" bold="true">
+				<text><![CDATA[Observaciones:]]></text>
+			</element>
+			<element kind="textField" uuid="05d4cb8f-3a9d-4c6e-9471-8b1eac9ef107" x="150" y="175" width="405" height="20" fontName="Arial" textAdjust="StretchHeight">
+				<expression><![CDATA[$P{observaciones}]]></expression>
+			</element>
+		</band>
+	</detail>
+	<summary height="150">
+		<element kind="staticText" uuid="16e5dc9a-4b1e-4d7f-a582-9c2fbd1f0218" x="0" y="0" width="555" height="25" fontName="Arial" fontSize="14.0" bold="true" hTextAlign="Center">
+			<text><![CDATA[Historial Clínico (Últimos 5 registros)]]></text>
+		</element>
+		<element kind="textField" uuid="27f6ed1b-5c2f-4e8a-b693-ad3ace2a1329" x="0" y="30" width="555" height="100" fontName="Arial" fontSize="10.0" textAdjust="StretchHeight">
+			<expression><![CDATA[$P{historialClinico}]]></expression>
+		</element>
+		<element kind="textField" uuid="38a7fe2c-6d3a-4f9b-87a4-be4bdf3b243a" positionType="Float" x="0" y="135" width="555" height="15" fontName="Arial" fontSize="8.0" italic="true" hTextAlign="Right">
+			<expression><![CDATA["Fecha de emisión: " + $P{fechaEmision}]]></expression>
+		</element>
+	</summary>
 </jasperReport>
