@@ -125,7 +125,7 @@ public class OrderService {
 
         processOrderItems(orden, dto, empresa, veterinario);
         calculateTotals(orden, dto);
-        applyRewardDiscount(orden, dto);
+        applyRewardDiscount(orden, dto, usuario);
         ordenRepository.save(orden);
         linkReward(orden, dto);
         awardPurchasePoints(orden, usuario);
@@ -266,7 +266,7 @@ public class OrderService {
         orden.setComisionPlataforma(subtotalGeneral.multiply(appProperties.getBusiness().getCommissionPercentage()));
     }
 
-    private void applyRewardDiscount(Orden orden, CreateOrderDto dto) {
+    private void applyRewardDiscount(Orden orden, CreateOrderDto dto, Usuario usuario) {
         BigDecimal descuentoTotal = BigDecimal.ZERO;
         if (dto.canjeRecompensaId() != null) {
             try {
@@ -275,6 +275,20 @@ public class OrderService {
 
                 if (canje.getUtilizado()) {
                     throw new BusinessException("Esta recompensa ya fue utilizada");
+                }
+
+                // Antes se aceptaba cualquier canjeRecompensaId: un cliente podia usar el cupon canjeado
+                // por otra persona (los ids son secuenciales) o el de otra tienda.
+                Long perfilId = clienteRepository.findByUsuarioId(usuario.getId())
+                        .map(p -> p.getId())
+                        .orElse(null);
+                if (perfilId == null || canje.getPuntosCliente() == null
+                        || !perfilId.equals(canje.getPuntosCliente().getId())) {
+                    throw new BusinessException("Esta recompensa no te pertenece");
+                }
+                if (orden.getEmpresa() == null || canje.getRecompensa().getEmpresa() == null
+                        || !orden.getEmpresa().getId().equals(canje.getRecompensa().getEmpresa().getId())) {
+                    throw new BusinessException("Esta recompensa no es válida para esta tienda");
                 }
 
                 com.vet_saas.modules.points.model.Recompensa recompensa = canje.getRecompensa();
