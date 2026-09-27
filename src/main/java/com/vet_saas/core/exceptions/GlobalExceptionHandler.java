@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -108,6 +109,15 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST,
                 "El archivo excede el tamaño máximo permitido de 10 MB",
+                request.getRequestURI(),
+                null);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(MissingServletRequestPartException ex,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST,
+                "Falta la parte requerida '" + ex.getRequestPartName() + "' en la solicitud",
                 request.getRequestURI(),
                 null);
     }

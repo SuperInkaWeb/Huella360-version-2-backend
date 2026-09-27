@@ -388,6 +388,13 @@ public class SubscriptionService {
                 if ("CLIENTE".equals(usuario.getRol().name())) {
                         sub = suscripcionRepository.findByUsuarioId(usuario.getId()).orElse(null);
                         petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+                } else if ("VETERINARIO".equals(usuario.getRol().name())) {
+                        // Antes caia en la rama de EMPRESA: un veterinario independiente no tiene empresa
+                        // y GET /subscriptions/usage/me respondia 404. No vende productos (quedan en 0).
+                        com.vet_saas.modules.veterinarian.model.Veterinario vet = getVeterinarioFromUsuario(usuario);
+                        sub = suscripcionRepository.findByVeterinarioId(vet.getId()).orElse(null);
+                        petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+                        serviceCount = servicioRepository.countByVeterinarioIdAndActivoTrue(vet.getId());
                 } else {
                         Empresa empresa = getEmpresaFromUsuario(usuario);
                         sub = getSuscripcionByEmpresa(empresa.getId());
@@ -525,7 +532,8 @@ public class SubscriptionService {
                 }
                 // Se registra primero y con flush: si el mismo pago se procesa en paralelo, la
                 // restriccion UNIQUE de mp_payment_id hace fallar a la segunda transaccion antes
-                // de que toque la suscripcion.
+                // de que toque la suscripcion. En el pago de un CLIENTE empresa_id y veterinario_id
+                // quedan en NULL (la tabla no tiene columna de usuario).
                 suscripcionPagoRepository.saveAndFlush(SuscripcionPago.builder()
                                 .mpPaymentId(mpPaymentId)
                                 .empresaId(empresaId)
