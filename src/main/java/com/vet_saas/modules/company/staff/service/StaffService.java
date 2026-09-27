@@ -78,6 +78,12 @@ public class StaffService {
             throw new BusinessException("No tienes permiso para responder esta solicitud");
         }
 
+        // Sin esto, un veterinario retirado del staff (FINALIZADO) o que ya rechazo podia "aceptar"
+        // de nuevo su invitacion vieja y volver al equipo sin que la empresa lo invitara.
+        if (solicitud.getEstado() != StaffStatus.PENDIENTE) {
+            throw new BusinessException("Esta invitación ya no está pendiente");
+        }
+
         if (aceptar) {
             solicitud.setEstado(StaffStatus.ACTIVO);
         } else {
