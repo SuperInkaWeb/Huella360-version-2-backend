@@ -4,6 +4,7 @@ import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.core.exceptions.types.UnauthorizedException;
+import com.vet_saas.security.jwt.Auth0JwtAuthenticationConverter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -44,6 +46,17 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(
                 HttpStatus.UNAUTHORIZED,
                 "Correo o contraseña incorrectos",
+                request.getRequestURI(),
+                null);
+    }
+
+    // Login con correo/contraseña de una cuenta desactivada por el admin.
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ErrorResponse> handleDisabledAccount(DisabledException ex,
+            HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNAUTHORIZED,
+                Auth0JwtAuthenticationConverter.CUENTA_DESACTIVADA_MSG,
                 request.getRequestURI(),
                 null);
     }

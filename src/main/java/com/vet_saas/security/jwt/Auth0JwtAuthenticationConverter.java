@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -32,6 +33,9 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
 
     private final UsuarioRepository usuarioRepository;
 
+    public static final String CUENTA_DESACTIVADA_MSG =
+            "Tu cuenta fue desactivada. Si crees que es un error, contacta a soporte.";
+
     // Claims personalizados de Auth0
     private static final String AUTH0_EMAIL_CLAIM = "https://vet-saas.com/email";
     private static final String AUTH0_EMAIL_CLAIM_ALT = "https://huella360.com/email";
@@ -49,6 +53,9 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
             } else {
                 return convertAuth0Token(jwt);
             }
+        } catch (DisabledException e) {
+            // Cuenta desactivada por el admin: se propaga tal cual para que el entry point la distinga.
+            throw e;
         } catch (Exception e) {
             log.error("Error convirtiendo JWT a Authentication: {}", e.getMessage(), e);
             throw new org.springframework.security.authentication.BadCredentialsException(
@@ -96,6 +103,8 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
             throw new org.springframework.security.authentication.BadCredentialsException(
                     "No se pudo autenticar. Asegurate de completar el registro en la plataforma.");
         }
+
+        verificarCuentaActiva(usuario);
 
         // Usar rol de la BD como fuente authoritative, fallback al JWT
         Role rol = usuario.getRol();
@@ -207,6 +216,8 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
                 .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException(
                         "Usuario no encontrado para ID: " + userId));
 
+        verificarCuentaActiva(usuario);
+
         // Extraer rol del claim "role"
         String roleStr = jwt.getClaimAsString("role");
         Role rol;
@@ -227,5 +238,14 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
                 null,
                 authorities
         );
+    }
+
+    // El login con Auth0 no pasa por el AuthenticationManager, asi que sin esta
+    // verificacion un usuario desactivado desde el panel admin seguia entrando.
+    private void verificarCuentaActiva(Usuario usuario) {
+        if (!usuario.isEnabled()) {
+            log.warn("Acceso rechazado: cuenta desactivada. Usuario ID: {}", usuario.getId());
+            throw new DisabledException(CUENTA_DESACTIVADA_MSG);
+        }
     }
 }
