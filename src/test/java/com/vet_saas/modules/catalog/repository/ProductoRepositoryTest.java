@@ -9,6 +9,7 @@ import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
+import com.vet_saas.modules.veterinarian.model.VerificationStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,9 +61,11 @@ class ProductoRepositoryTest extends AbstractIntegrationTest {
                 .emailVerificado(true)
                 .build());
 
+        // Solo las empresas VERIFICADAS publican en el marketplace (regla A3).
         empresa = empresaRepository.save(Empresa.builder()
                 .usuarioPropietario(propietario)
                 .nombreComercial("Empresa de Prueba")
+                .estadoValidacion(VerificationStatus.VERIFICADO)
                 .build());
 
         padre = categoriaRepository.save(Categoria.builder()
@@ -163,6 +166,29 @@ class ProductoRepositoryTest extends AbstractIntegrationTest {
 
         assertEquals(1, resultado.getTotalElements());
         assertEquals(valido.getId(), resultado.getContent().get(0).getId());
+    }
+
+    @Test
+    void findMarketplaceProducts_excluyeProductosDeEmpresasNoVerificadas() {
+        Producto publicado = crearProducto("Producto de empresa verificada", padre, true, true, EstadoProducto.ACTIVO);
+        empresa.setEstadoValidacion(VerificationStatus.PENDIENTE);
+        empresaRepository.save(empresa);
+
+        Page<Producto> resultado = productoRepository.findMarketplaceProducts(
+                null, EstadoProducto.ACTIVO, null, PageRequest.of(0, 20));
+
+        assertEquals(0, resultado.getTotalElements());
+        assertTrue(productoRepository.findByIdAndEstadoAndVisibleTrueAndActivoTrue(
+                publicado.getId(), EstadoProducto.ACTIVO).isEmpty());
+        assertTrue(productoRepository.countPublicProductsByCategoria(EstadoProducto.ACTIVO).isEmpty());
+    }
+
+    @Test
+    void findByIdPublico_devuelveProductoDeEmpresaVerificada() {
+        Producto publicado = crearProducto("Producto visible", padre, true, true, EstadoProducto.ACTIVO);
+
+        assertTrue(productoRepository.findByIdAndEstadoAndVisibleTrueAndActivoTrue(
+                publicado.getId(), EstadoProducto.ACTIVO).isPresent());
     }
 
     @Test
