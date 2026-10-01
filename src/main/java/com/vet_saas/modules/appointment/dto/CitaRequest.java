@@ -20,7 +20,8 @@ public class CitaRequest {
     @NotNull(message = "El servicio es requerido")
     private Long servicioId;
 
-    @NotNull(message = "La empresa es requerida")
+    // Requerida para servicios de una empresa. Los servicios de un veterinario independiente
+    // no tienen empresa: la cita se asigna al veterinario dueno del servicio.
     private Long empresaId;
 
     private Long veterinarioId;
