@@ -112,7 +112,10 @@ public class CompanyService {
 
     @Transactional(readOnly = true)
     public CompanyResponse getPublicProfile(Long id) {
+        // Regla de visibilidad (A3): una empresa PENDIENTE o RECHAZADA no tiene perfil público,
+        // ni siquiera por link directo (antes solo desaparecia del directorio).
         Empresa empresa = empresaRepository.findById(id)
+                .filter(e -> e.getEstadoValidacion() == VerificationStatus.VERIFICADO)
                 .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", id));
 
         return mapToResponse(empresa);

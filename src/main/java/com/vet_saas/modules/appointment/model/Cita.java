@@ -44,7 +44,7 @@ public class Cita {
     private Servicio servicio;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empresa_id", nullable = false)
+    @JoinColumn(name = "empresa_id")
     private Empresa empresa;
 
     @ManyToOne(fetch = FetchType.LAZY)

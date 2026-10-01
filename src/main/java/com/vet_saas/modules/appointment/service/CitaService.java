@@ -67,6 +67,15 @@ public class CitaService {
         Servicio servicio = servicioRepository.findById(request.getServicioId())
                 .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado"));
 
+        // Servicio de un veterinario independiente: no hay empresa ni horario de atencion,
+        // el cliente propone fecha y hora y el veterinario confirma o rechaza desde su Agenda.
+        if (servicio.getEmpresa() == null && servicio.getVeterinario() != null) {
+            return solicitarCitaVeterinarioIndependiente(cliente, request, servicio, mascota);
+        }
+
+        if (request.getEmpresaId() == null) {
+            throw new BusinessException("La empresa es requerida");
+        }
         Empresa empresa = empresaRepository.findById(request.getEmpresaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
 
@@ -94,6 +103,41 @@ public class CitaService {
                 .mascota(mascota)
                 .servicio(servicio)
                 .empresa(empresa)
+                .veterinario(veterinario)
+                .fechaProgramada(request.getFechaProgramada())
+                .horaInicio(request.getHoraInicio())
+                .horaFin(horaFin)
+                .estado(AppointmentStatus.SOLICITADA)
+                .notasCliente(request.getNotasCliente())
+                .build();
+
+        return CitaResponse.fromEntity(citaRepository.save(cita));
+    }
+
+    private CitaResponse solicitarCitaVeterinarioIndependiente(Usuario cliente, CitaRequest request,
+                                                              Servicio servicio, Mascota mascota) {
+        if (!Boolean.TRUE.equals(servicio.getActivo())) {
+            throw new BusinessException("El servicio no está disponible.");
+        }
+        if (mascota != null && (mascota.getUsuario() == null || !mascota.getUsuario().getId().equals(cliente.getId()))) {
+            throw new ForbiddenException("La mascota no te pertenece");
+        }
+
+        Veterinario veterinario = servicio.getVeterinario();
+        LocalTime horaFin = request.getHoraInicio().plusMinutes(servicio.getDuracionMinutos());
+
+        // Solo se bloquea si ya hay una cita CONFIRMADA en ese horario: varias propuestas pueden
+        // competir por el mismo horario y el veterinario elige cual confirmar.
+        if (citaRepository.existsOverlapEnEstados(veterinario.getId(), request.getFechaProgramada(),
+                request.getHoraInicio(), horaFin, List.of(AppointmentStatus.CONFIRMADA), 0L)) {
+            throw new BusinessException("El veterinario ya tiene una cita confirmada en ese horario. Propón otro horario.");
+        }
+
+        Cita cita = Cita.builder()
+                .cliente(cliente)
+                .mascota(mascota)
+                .servicio(servicio)
+                .empresa(null)
                 .veterinario(veterinario)
                 .fechaProgramada(request.getFechaProgramada())
                 .horaInicio(request.getHoraInicio())
@@ -218,6 +262,13 @@ public class CitaService {
     public CitaResponse actualizarEstado(Long citaId, AppointmentStatus nuevoEstado, String notasInternas) {
         Cita cita = citaRepository.findById(citaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cita no encontrada"));
+
+        // Cita propuesta a un veterinario independiente: al confirmarla no puede cruzarse con otra ya confirmada.
+        if (nuevoEstado == AppointmentStatus.CONFIRMADA && cita.getEmpresa() == null && cita.getVeterinario() != null
+                && citaRepository.existsOverlapEnEstados(cita.getVeterinario().getId(), cita.getFechaProgramada(),
+                        cita.getHoraInicio(), cita.getHoraFin(), List.of(AppointmentStatus.CONFIRMADA), cita.getId())) {
+            throw new BusinessException("Ya tienes otra cita confirmada en ese horario. Rechaza esta propuesta o reprograma la otra.");
+        }
 
         cita.setEstado(nuevoEstado);
         if (notasInternas != null) {

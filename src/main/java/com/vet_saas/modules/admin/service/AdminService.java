@@ -14,6 +14,7 @@ import com.vet_saas.modules.sales.model.EstadoOrden;
 import com.vet_saas.modules.catalog.repository.ServicioRepository;
 import com.vet_saas.modules.veterinarian.model.VerificationStatus;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
+import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -56,7 +57,11 @@ public class AdminService {
     }
 
     @Transactional
-    public void toggleUserStatus(Long userId) {
+    public void toggleUserStatus(Long userId, Long adminId) {
+        // Un admin desactivado ya no puede entrar: si se desactiva a si mismo se queda sin acceso.
+        if (userId.equals(adminId)) {
+            throw new BusinessException("No puedes desactivar tu propia cuenta.");
+        }
         Usuario usuario = usuarioRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", "id", userId));
         usuario.setEstado(!usuario.isEstado());

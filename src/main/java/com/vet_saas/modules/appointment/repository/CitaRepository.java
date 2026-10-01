@@ -46,6 +46,19 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
                           @Param("horaInicio") LocalTime horaInicio,
                           @Param("horaFin") LocalTime horaFin);
 
+    // Cruce con citas del veterinario en ciertos estados (p. ej. solo CONFIRMADA), excluyendo una cita
+    // (la que se esta confirmando; 0 si no hay). Estados por parametro: appointment_status es un enum nativo de PG.
+    @Query("SELECT COUNT(c) > 0 FROM Cita c WHERE c.veterinario.id = :veterinarioId " +
+            "AND c.fechaProgramada = :fecha AND c.estado IN :estados " +
+            "AND c.id <> :excluirId " +
+            "AND c.horaInicio < :horaFin AND c.horaFin > :horaInicio")
+    boolean existsOverlapEnEstados(@Param("veterinarioId") Long veterinarioId,
+                                   @Param("fecha") LocalDate fecha,
+                                   @Param("horaInicio") LocalTime horaInicio,
+                                   @Param("horaFin") LocalTime horaFin,
+                                   @Param("estados") java.util.Collection<AppointmentStatus> estados,
+                                   @Param("excluirId") Long excluirId);
+
     @Query("SELECT COUNT(c) FROM Cita c WHERE c.empresa.id = :empresaId AND c.fechaProgramada = :fecha")
     long countByEmpresaIdAndFecha(@Param("empresaId") Long empresaId, @Param("fecha") LocalDate fecha);
 

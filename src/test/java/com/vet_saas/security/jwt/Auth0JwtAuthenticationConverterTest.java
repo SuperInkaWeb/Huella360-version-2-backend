@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -232,6 +233,28 @@ class Auth0JwtAuthenticationConverterTest {
 
         assertTrue(result.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_VETERINARIO")));
+    }
+
+    @Test
+    void convert_auth0Token_rechazaUsuarioDesactivado() {
+        testUser.setEstado(false);
+        Jwt jwt = buildAuth0Jwt(Map.of("https://vet-saas.com/email", "test@test.com"), "auth0|abc123");
+
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+
+        // Debe ser DisabledException (no BadCredentials) para que el entry point responda ACCOUNT_DISABLED
+        DisabledException ex = assertThrows(DisabledException.class, () -> converter.convert(jwt));
+        assertEquals(Auth0JwtAuthenticationConverter.CUENTA_DESACTIVADA_MSG, ex.getMessage());
+    }
+
+    @Test
+    void convert_legacyToken_rechazaUsuarioDesactivado() {
+        testUser.setEstado(false);
+        Jwt jwt = buildLegacyJwt(Map.of("role", "CLIENTE"), "42");
+
+        when(usuarioRepository.findById(42L)).thenReturn(Optional.of(testUser));
+
+        assertThrows(DisabledException.class, () -> converter.convert(jwt));
     }
 
     private Jwt buildAuth0Jwt(Map<String, Object> claims, String subject) {
