@@ -13,7 +13,7 @@ import com.vet_saas.modules.catalog.repository.CategoriaRepository;
 import com.vet_saas.modules.catalog.repository.ProductoRepository;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.service.EmpresaLookupService;
-import com.vet_saas.modules.subscription.service.SubscriptionService;
+import com.vet_saas.modules.subscription.service.PlanEnforcementService;
 import com.vet_saas.modules.user.model.Usuario;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,7 +35,7 @@ public class ProductService {
     private final EmpresaLookupService empresaLookupService;
     private final CategoriaRepository categoriaRepository;
     private final StorageService storageService;
-    private final SubscriptionService subscriptionService;
+    private final PlanEnforcementService planEnforcementService;
 
     private static final int MAX_IMAGES = 5;
 
@@ -43,12 +43,11 @@ public class ProductService {
     public ProductResponse createProduct(Usuario usuario, CreateProductDto dto, List<MultipartFile> imageFiles) {
         Empresa empresa = empresaLookupService.getEmpresaFromUsuario(usuario);
 
-        // Validar límite de suscripción
+        // Validar límite de suscripción. H360-EMP-001: mismo camino que los servicios
+        // (mensaje con el límite y el plan; si la empresa no tiene suscripción se le asigna
+        // el plan gratuito en vez de responder 404).
         long currentCount = productoRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
-        if (!subscriptionService.canAddProduct(empresa.getId(), currentCount)) {
-            throw new BusinessException(
-                    "Has alcanzado el límite de productos permitido por tu plan actual. Considera subir de nivel a un plan superior.");
-        }
+        planEnforcementService.enforceProductLimit(empresa.getId(), currentCount);
 
         String sku = (dto.sku() != null && !dto.sku().isBlank()) ? dto.sku() : generateSku(empresa.getId(), currentCount);
 
