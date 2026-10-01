@@ -328,26 +328,6 @@ public class SubscriptionService {
         }
 
         /**
-         * Verifica si una empresa puede agregar un producto según su plan.
-         * 
-         * @param empresaId   ID de la empresa.
-         * @param currentCount Cantidad actual de productos activos de la empresa.
-         * @return true si puede agregar, false si alcanzó el límite o no incluido.
-         */
-        public boolean canAddProduct(Long empresaId, long currentCount) {
-                Suscripcion sub = getSuscripcionByEmpresa(empresaId);
-                if (sub == null) return true;
-                Integer limit = sub.getPlan().getLimiteProductos();
-                if (limit == null || limit < 0) {
-                        return true; // -1 o null = ilimitado
-                }
-                if (limit == 0) {
-                        return false; // 0 = no incluido
-                }
-                return currentCount < limit;
-        }
-
-        /**
          * Verifica si un usuario CLIENTE puede hacer uso de IA según su plan.
          * Si el plan tiene limiteIaUso == -1 o null, es ilimitado.
          * Si el plan tiene limiteIaUso == 0, no tiene acceso a IA.
