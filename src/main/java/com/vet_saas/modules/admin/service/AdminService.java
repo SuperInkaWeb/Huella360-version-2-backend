@@ -51,8 +51,8 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AdminUserResponseDto> getAllUsers(Pageable pageable) {
-        return usuarioRepository.findAll(pageable)
+    public Page<AdminUserResponseDto> getAllUsers(String q, Pageable pageable) {
+        return usuarioRepository.buscarParaAdmin(normalizarBusqueda(q), pageable)
                 .map(this::mapToUserResponse);
     }
 
@@ -69,9 +69,12 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AdminCompanyResponseDto> getAllCompanies(Pageable pageable) {
-        return empresaRepository.findAll(pageable)
-                .map(this::mapToCompanyResponse);
+    public Page<AdminCompanyResponseDto> getAllCompanies(String q, VerificationStatus estado, Pageable pageable) {
+        String busqueda = normalizarBusqueda(q);
+        var pagina = estado == null
+                ? empresaRepository.buscarParaAdmin(busqueda, pageable)
+                : empresaRepository.buscarParaAdminPorEstado(busqueda, estado, pageable);
+        return pagina.map(this::mapToCompanyResponse);
     }
 
     @Transactional
@@ -90,9 +93,12 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AdminVeterinarioResponseDto> getAllVeterinarios(Pageable pageable) {
-        return veterinarioRepository.findAll(pageable)
-                .map(this::mapToVeterinarioResponse);
+    public Page<AdminVeterinarioResponseDto> getAllVeterinarios(String q, VerificationStatus estado, Pageable pageable) {
+        String busqueda = normalizarBusqueda(q);
+        var pagina = estado == null
+                ? veterinarioRepository.buscarParaAdmin(busqueda, pageable)
+                : veterinarioRepository.buscarParaAdminPorEstado(busqueda, estado, pageable);
+        return pagina.map(this::mapToVeterinarioResponse);
     }
 
     @Transactional
@@ -107,6 +113,11 @@ public class AdminService {
         }
 
         veterinarioRepository.save(veterinario);
+    }
+
+    // null o espacios = sin filtro (el LIKE '%%' devuelve todo).
+    static String normalizarBusqueda(String q) {
+        return q == null ? "" : q.trim();
     }
 
     private AdminCompanyResponseDto mapToCompanyResponse(com.vet_saas.modules.company.model.Empresa e) {
