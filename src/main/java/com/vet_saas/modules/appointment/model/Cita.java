@@ -7,6 +7,8 @@ import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.sales.model.Orden;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeRegistration;
+import org.hibernate.type.descriptor.jdbc.LocalTimeJdbcType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,6 +24,9 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// Horas "de pared" (TIME): sin conversion de zona. hibernate.jdbc.time_zone=UTC + JVM en America/Lima
+// desplazaba 5 h las horas de citas y horarios de atencion (columnas y parametros de consultas).
+@JdbcTypeRegistration(value = LocalTimeJdbcType.class, registrationCode = SqlTypes.TIME)
 @Entity
 @Table(name = "citas")
 public class Cita {
