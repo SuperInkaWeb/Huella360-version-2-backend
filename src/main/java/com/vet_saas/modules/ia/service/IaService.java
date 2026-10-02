@@ -3,6 +3,8 @@ package com.vet_saas.modules.ia.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vet_saas.config.AppProperties;
+import com.vet_saas.core.exceptions.types.ForbiddenException;
+import com.vet_saas.modules.appointment.repository.CitaRepository;
 import com.vet_saas.modules.ia.dto.HealthAlertRequest;
 import com.vet_saas.modules.ia.dto.HealthAlertResponse;
 import com.vet_saas.modules.ia.dto.HealthAlertResponse.HealthAlert;
@@ -11,7 +13,10 @@ import com.vet_saas.modules.ia.repository.IaUsageRepository;
 import com.vet_saas.modules.pet.model.Mascota;
 import com.vet_saas.modules.pet.repository.MascotaRepository;
 import com.vet_saas.modules.subscription.service.SubscriptionService;
+import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
+import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -34,6 +39,8 @@ public class IaService {
     private final SubscriptionService subscriptionService;
     private final IaUsageRepository iaUsageRepository;
     private final RestTemplate restTemplate;
+    private final CitaRepository citaRepository;
+    private final VeterinarioRepository veterinarioRepository;
 
     @Transactional
     public HealthAlertResponse generateHealthAlerts(Usuario usuario, HealthAlertRequest request) {
@@ -41,8 +48,10 @@ public class IaService {
                 .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
                         "Mascota", "id", request.mascotaId()));
 
+        verificarAccesoAMascota(usuario, mascota);
+
         // Verificar límite de uso de IA por plan
-        if (usuario.getRol() != null && usuario.getRol() == com.vet_saas.modules.user.model.Role.CLIENTE) {
+        if (usuario.getRol() == Role.CLIENTE) {
             subscriptionService.enforceIaUsage(usuario.getId());
         }
 
@@ -62,6 +71,27 @@ public class IaService {
             log.error("Error generating health alerts: {}", e.getMessage());
             trackUsage(usuario, request.mascotaId(), "fallback", false);
             return generateFallbackAlerts(mascota, request);
+        }
+    }
+
+    /**
+     * H360-SEC (B7): antes bastaba con conocer el id para que la IA analizara cualquier mascota y devolviera
+     * sus datos (nombre, especie, raza, peso, edad). Misma regla que la historia clinica: el cliente solo
+     * sus mascotas y el veterinario solo las que atendio en alguna cita.
+     */
+    private void verificarAccesoAMascota(Usuario usuario, Mascota mascota) {
+        if (usuario.getRol() == Role.CLIENTE) {
+            if (mascota.getUsuario() == null || !mascota.getUsuario().getId().equals(usuario.getId())) {
+                throw new ForbiddenException("No tienes acceso a esta mascota");
+            }
+        } else if (usuario.getRol() == Role.VETERINARIO) {
+            Veterinario vet = veterinarioRepository.findByUsuarioId(usuario.getId())
+                    .orElseThrow(() -> new ForbiddenException("Perfil de veterinario no encontrado"));
+            if (!citaRepository.existsByVeterinarioIdAndMascotaId(vet.getId(), mascota.getId())) {
+                throw new ForbiddenException("No tienes acceso a esta mascota");
+            }
+        } else {
+            throw new ForbiddenException("No tienes acceso a esta mascota");
         }
     }
 
