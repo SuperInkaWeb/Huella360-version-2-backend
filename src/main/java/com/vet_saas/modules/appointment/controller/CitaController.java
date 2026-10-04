@@ -5,6 +5,7 @@ import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.appointment.dto.CitaRequest;
 import com.vet_saas.modules.appointment.dto.CitaResponse;
 import com.vet_saas.modules.appointment.dto.CrearCitaEmpresaRequest;
+import com.vet_saas.modules.appointment.dto.DisponibilidadResponse;
 import com.vet_saas.modules.appointment.model.AppointmentStatus;
 import com.vet_saas.modules.appointment.service.CitaService;
 import com.vet_saas.modules.company.model.Empresa;
@@ -42,6 +43,15 @@ public class CitaController {
         return ResponseEntity.ok(ApiResponse.success(
                 citaService.getAvailableSlots(empresaId, servicioId, fecha),
                 "Horarios disponibles recuperados"));
+    }
+
+    @GetMapping("/slots")
+    public ResponseEntity<ApiResponse<DisponibilidadResponse>> getDisponibilidad(
+            @RequestParam Long servicioId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+        return ResponseEntity.ok(ApiResponse.success(
+                citaService.getDisponibilidad(servicioId, fecha),
+                "Disponibilidad recuperada"));
     }
 
     @PostMapping

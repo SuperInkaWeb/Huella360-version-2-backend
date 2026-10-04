@@ -1,6 +1,7 @@
 package com.vet_saas.modules.appointment.model;
 
 import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,8 +26,13 @@ public class HorarioAtencion {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empresa_id", nullable = false)
+    @JoinColumn(name = "empresa_id")
     private Empresa empresa;
+
+    // Horario de un veterinario independiente: en ese caso no hay empresa (uno u otro, nunca ambos)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "veterinario_id")
+    private Veterinario veterinario;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "dia_semana", nullable = false, length = 10)

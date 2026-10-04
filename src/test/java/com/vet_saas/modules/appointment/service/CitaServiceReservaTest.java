@@ -4,6 +4,7 @@ import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.modules.appointment.dto.CitaRequest;
 import com.vet_saas.modules.appointment.dto.CitaResponse;
+import com.vet_saas.modules.appointment.dto.DisponibilidadResponse;
 import com.vet_saas.modules.appointment.model.AppointmentStatus;
 import com.vet_saas.modules.appointment.model.Cita;
 import com.vet_saas.modules.appointment.model.HorarioAtencion;
@@ -100,8 +101,8 @@ class CitaServiceReservaTest {
         assertEquals(AppointmentStatus.SOLICITADA, cita.getEstado());
         assertEquals(LocalTime.of(16, 45), cita.getHoraFin());
         assertEquals("Carlos Rivas", resp.getVeterinarioNombre());
-        // Sin horario fijo: nunca se consulta el horario de atencion ni una empresa
-        verifyNoInteractions(horarioAtencionRepository, empresaRepository);
+        // Sin horario configurado: propuesta libre, sin pasar por ninguna empresa
+        verifyNoInteractions(empresaRepository);
     }
 
     @Test
@@ -232,5 +233,145 @@ class CitaServiceReservaTest {
         assertEquals(AppointmentStatus.CONFIRMADA,
                 citaService.actualizarEstado(60L, AppointmentStatus.CONFIRMADA, null).getEstado());
         verify(citaRepository, never()).existsOverlapEnEstados(any(), any(), any(), any(), any(), any());
+    }
+
+    // ---- Horario de atencion del veterinario independiente y bloques ocupados ----
+
+    private HorarioAtencion horarioVet(int desde, int hasta) {
+        return HorarioAtencion.builder().veterinario(vet).diaSemana(FECHA.getDayOfWeek())
+                .horaInicio(LocalTime.of(desde, 0)).horaFin(LocalTime.of(hasta, 0)).capacidad(1).activo(true).build();
+    }
+
+    private Cita citaEn(LocalTime inicio, LocalTime fin, AppointmentStatus estado) {
+        return Cita.builder().id(70L).veterinario(vet).cliente(cliente).fechaProgramada(FECHA)
+                .horaInicio(inicio).horaFin(fin).estado(estado).build();
+    }
+
+    @Test
+    void vetConHorario_bloqueLibreDentroDelHorario_seCreaSolicitada() {
+        when(servicioRepository.findById(20L)).thenReturn(Optional.of(servicioVet));
+        when(horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(2L)).thenReturn(List.of(horarioVet(9, 13)));
+        when(citaRepository.findByVeterinarioIdAndFechaProgramada(2L, FECHA)).thenReturn(List.of());
+
+        citaService.crearCita(cliente, request(20L, null, LocalTime.of(9, 45)));
+
+        ArgumentCaptor<Cita> captor = ArgumentCaptor.forClass(Cita.class);
+        verify(citaRepository).save(captor.capture());
+        assertSame(vet, captor.getValue().getVeterinario());
+        assertEquals(AppointmentStatus.SOLICITADA, captor.getValue().getEstado());
+    }
+
+    @Test
+    void vetConHorario_fueraDelRango_esRechazado() {
+        when(servicioRepository.findById(20L)).thenReturn(Optional.of(servicioVet));
+        when(horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(2L)).thenReturn(List.of(horarioVet(9, 13)));
+
+        // 12:30 + 45 min termina 13:15, despues del cierre
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> citaService.crearCita(cliente, request(20L, null, LocalTime.of(12, 30))));
+        assertEquals("El horario seleccionado está fuera del horario de atención.", ex.getMessage());
+        verify(citaRepository, never()).save(any());
+    }
+
+    @Test
+    void vetConHorario_diaQueNoAtiende_esRechazado() {
+        when(servicioRepository.findById(20L)).thenReturn(Optional.of(servicioVet));
+        HorarioAtencion otroDia = horarioVet(9, 13);
+        otroDia.setDiaSemana(FECHA.getDayOfWeek().plus(1));
+        when(horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(2L)).thenReturn(List.of(otroDia));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> citaService.crearCita(cliente, request(20L, null, LocalTime.of(10, 0))));
+        assertEquals("El veterinario no atiende ese día.", ex.getMessage());
+        verify(citaRepository, never()).save(any());
+    }
+
+    @Test
+    void vetConHorario_bloqueConSolicitudPendiente_yaCuentaComoOcupado() {
+        when(servicioRepository.findById(20L)).thenReturn(Optional.of(servicioVet));
+        when(horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(2L)).thenReturn(List.of(horarioVet(9, 13)));
+        when(citaRepository.findByVeterinarioIdAndFechaProgramada(2L, FECHA)).thenReturn(
+                List.of(citaEn(LocalTime.of(9, 45), LocalTime.of(10, 30), AppointmentStatus.SOLICITADA)));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> citaService.crearCita(cliente, request(20L, null, LocalTime.of(9, 45))));
+        assertTrue(ex.getMessage().contains("ocupado"));
+        verify(citaRepository, never()).save(any());
+    }
+
+    @Test
+    void disponibilidad_vetSinHorario_indicaPropuestaLibre() {
+        when(servicioRepository.findById(20L)).thenReturn(Optional.of(servicioVet));
+        when(horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(2L)).thenReturn(List.of());
+
+        DisponibilidadResponse resp = citaService.getDisponibilidad(20L, FECHA);
+
+        assertFalse(resp.horarioConfigurado());
+        assertTrue(resp.slots().isEmpty());
+    }
+
+    @Test
+    void vetConTodosLosDiasInactivos_sigueEnPropuestaLibre() {
+        HorarioAtencion inactivo = horarioVet(9, 13);
+        inactivo.setActivo(false);
+        when(servicioRepository.findById(20L)).thenReturn(Optional.of(servicioVet));
+        when(horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(2L)).thenReturn(List.of(inactivo));
+
+        assertFalse(citaService.getDisponibilidad(20L, FECHA).horarioConfigurado());
+
+        // y puede recibir una propuesta fuera de ese rango
+        citaService.crearCita(cliente, request(20L, null, LocalTime.of(16, 0)));
+        verify(citaRepository).save(any(Cita.class));
+    }
+
+    @Test
+    void disponibilidad_vetConHorario_devuelveTodosLosBloquesYMarcaLosOcupados() {
+        when(servicioRepository.findById(20L)).thenReturn(Optional.of(servicioVet));
+        when(horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(2L)).thenReturn(List.of(horarioVet(9, 12)));
+        when(citaRepository.findByVeterinarioIdAndFechaProgramada(2L, FECHA)).thenReturn(List.of(
+                citaEn(LocalTime.of(9, 45), LocalTime.of(10, 30), AppointmentStatus.CONFIRMADA),
+                citaEn(LocalTime.of(11, 15), LocalTime.of(12, 0), AppointmentStatus.RECHAZADA)));
+
+        DisponibilidadResponse resp = citaService.getDisponibilidad(20L, FECHA);
+
+        // 09:00-12:00 en bloques de 45 min: 09:00, 09:45, 10:30, 11:15
+        assertTrue(resp.horarioConfigurado());
+        assertEquals(List.of(
+                new DisponibilidadResponse.Slot(LocalTime.of(9, 0), true),
+                new DisponibilidadResponse.Slot(LocalTime.of(9, 45), false),
+                new DisponibilidadResponse.Slot(LocalTime.of(10, 30), true),
+                new DisponibilidadResponse.Slot(LocalTime.of(11, 15), true)), resp.slots());
+    }
+
+    @Test
+    void disponibilidad_empresa_ocupadoSoloCuandoSeLlenaElCupo() {
+        when(servicioRepository.findById(30L)).thenReturn(Optional.of(servicioEmpresa));
+        HorarioAtencion horario = HorarioAtencion.builder().empresa(empresa).diaSemana(FECHA.getDayOfWeek())
+                .horaInicio(LocalTime.of(9, 0)).horaFin(LocalTime.of(10, 30)).capacidad(2).activo(true).build();
+        when(horarioAtencionRepository.findByEmpresaIdOrderByDiaSemana(3L)).thenReturn(List.of(horario));
+        when(citaRepository.findByEmpresaIdAndFechaProgramada(3L, FECHA)).thenReturn(List.of(
+                citaEn(LocalTime.of(9, 0), LocalTime.of(9, 30), AppointmentStatus.SOLICITADA),
+                citaEn(LocalTime.of(9, 30), LocalTime.of(10, 0), AppointmentStatus.SOLICITADA),
+                citaEn(LocalTime.of(9, 30), LocalTime.of(10, 0), AppointmentStatus.CONFIRMADA)));
+
+        DisponibilidadResponse resp = citaService.getDisponibilidad(30L, FECHA);
+
+        assertEquals(List.of(
+                new DisponibilidadResponse.Slot(LocalTime.of(9, 0), true),
+                new DisponibilidadResponse.Slot(LocalTime.of(9, 30), false),
+                new DisponibilidadResponse.Slot(LocalTime.of(10, 0), true)), resp.slots());
+        // El endpoint anterior sigue devolviendo solo los libres
+        assertEquals(List.of(LocalTime.of(9, 0), LocalTime.of(10, 0)), citaService.getAvailableSlots(3L, 30L, FECHA));
+    }
+
+    @Test
+    void disponibilidad_empresaSinAtencionEseDia_noDevuelveBloques() {
+        when(servicioRepository.findById(30L)).thenReturn(Optional.of(servicioEmpresa));
+        when(horarioAtencionRepository.findByEmpresaIdOrderByDiaSemana(3L)).thenReturn(List.of());
+
+        DisponibilidadResponse resp = citaService.getDisponibilidad(30L, FECHA);
+
+        assertTrue(resp.horarioConfigurado());
+        assertTrue(resp.slots().isEmpty());
     }
 }
