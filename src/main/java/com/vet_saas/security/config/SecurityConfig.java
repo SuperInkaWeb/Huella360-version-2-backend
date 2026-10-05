@@ -147,7 +147,8 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 HttpMethod.GET,
-                                "/api/v1/appointments/available-slots"
+                                "/api/v1/appointments/available-slots",
+                                "/api/v1/appointments/slots"
                         ).permitAll()
 
                         // =====================================================

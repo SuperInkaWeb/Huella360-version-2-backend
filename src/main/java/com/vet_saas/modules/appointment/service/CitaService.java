@@ -6,6 +6,7 @@ import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.appointment.dto.CitaRequest;
 import com.vet_saas.modules.appointment.dto.CitaResponse;
 import com.vet_saas.modules.appointment.dto.CrearCitaEmpresaRequest;
+import com.vet_saas.modules.appointment.dto.DisponibilidadResponse;
 import com.vet_saas.modules.appointment.model.AppointmentStatus;
 import com.vet_saas.modules.appointment.model.Cita;
 import com.vet_saas.modules.appointment.model.HorarioAtencion;
@@ -126,10 +127,14 @@ public class CitaService {
         Veterinario veterinario = servicio.getVeterinario();
         LocalTime horaFin = request.getHoraInicio().plusMinutes(servicio.getDuracionMinutos());
 
-        // Solo se bloquea si ya hay una cita CONFIRMADA en ese horario: varias propuestas pueden
-        // competir por el mismo horario y el veterinario elige cual confirmar.
-        if (citaRepository.existsOverlapEnEstados(veterinario.getId(), request.getFechaProgramada(),
+        List<HorarioAtencion> horariosVet = horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(veterinario.getId());
+        if (tieneDiaActivo(horariosVet)) {
+            // Con horario de atencion configurado el cliente reserva un bloque libre, igual que con una empresa
+            validarBloqueVeterinario(veterinario, horariosVet, request.getFechaProgramada(), request.getHoraInicio(), horaFin);
+        } else if (citaRepository.existsOverlapEnEstados(veterinario.getId(), request.getFechaProgramada(),
                 request.getHoraInicio(), horaFin, List.of(AppointmentStatus.CONFIRMADA), 0L)) {
+            // Sin horario fijo solo se bloquea si ya hay una cita CONFIRMADA en ese horario: varias propuestas
+            // pueden competir por el mismo horario y el veterinario elige cual confirmar.
             throw new BusinessException("El veterinario ya tiene una cita confirmada en ese horario. Propón otro horario.");
         }
 
@@ -331,46 +336,104 @@ public class CitaService {
         }
     }
 
+    private void validarBloqueVeterinario(Veterinario veterinario, List<HorarioAtencion> horariosVet,
+                                          LocalDate fecha, LocalTime horaInicio, LocalTime horaFin) {
+        HorarioAtencion horario = horarioDelDia(horariosVet, fecha);
+
+        if (horario == null) {
+            throw new BusinessException("El veterinario no atiende ese día.");
+        }
+        if (horaInicio.isBefore(horario.getHoraInicio()) || horaFin.isAfter(horario.getHoraFin())) {
+            throw new BusinessException("El horario seleccionado está fuera del horario de atención.");
+        }
+        if (cuposOcupados(citasVigentes(citaRepository.findByVeterinarioIdAndFechaProgramada(veterinario.getId(), fecha)),
+                horaInicio, horaFin) >= horario.getCapacidad()) {
+            throw new BusinessException("Ese horario ya está ocupado. Seleccione otro horario.");
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<LocalTime> getAvailableSlots(Long empresaId, Long servicioId, LocalDate fecha) {
         Servicio servicio = servicioRepository.findById(servicioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado"));
 
-        DayOfWeek diaSemana = fecha.getDayOfWeek();
-        HorarioAtencion horario = horarioAtencionRepository.findByEmpresaIdAndDiaSemana(empresaId, diaSemana)
-                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
-                .orElse(null);
+        return calcularSlots(horarioDelDia(horarioAtencionRepository.findByEmpresaIdOrderByDiaSemana(empresaId), fecha),
+                servicio.getDuracionMinutos(),
+                citasVigentes(citaRepository.findByEmpresaIdAndFechaProgramada(empresaId, fecha))).stream()
+                .filter(DisponibilidadResponse.Slot::disponible)
+                .map(DisponibilidadResponse.Slot::hora)
+                .toList();
+    }
 
-        if (horario == null) {
-            return List.of();
-        }
-
+    /**
+     * Bloques del dia para un servicio, libres y ocupados, segun el horario de atencion de su empresa
+     * o de su veterinario independiente. El cliente ve los ocupados en vez de que desaparezcan de la lista.
+     */
+    @Transactional(readOnly = true)
+    public DisponibilidadResponse getDisponibilidad(Long servicioId, LocalDate fecha) {
+        Servicio servicio = servicioRepository.findById(servicioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado"));
         int duracion = servicio.getDuracionMinutos();
-        List<LocalTime> slots = new ArrayList<>();
-        LocalTime cursor = horario.getHoraInicio();
-        while (!cursor.plusMinutes(duracion).isAfter(horario.getHoraFin())) {
-            slots.add(cursor);
-            cursor = cursor.plusMinutes(duracion);
+
+        if (servicio.getEmpresa() == null && servicio.getVeterinario() != null) {
+            Long veterinarioId = servicio.getVeterinario().getId();
+            List<HorarioAtencion> horariosVet = horarioAtencionRepository.findByVeterinarioIdOrderByDiaSemana(veterinarioId);
+            if (!tieneDiaActivo(horariosVet)) {
+                return new DisponibilidadResponse(false, List.of());
+            }
+            return new DisponibilidadResponse(true, calcularSlots(horarioDelDia(horariosVet, fecha), duracion,
+                    citasVigentes(citaRepository.findByVeterinarioIdAndFechaProgramada(veterinarioId, fecha))));
         }
 
-        if (slots.isEmpty()) {
-            return List.of();
+        if (servicio.getEmpresa() == null) {
+            throw new BusinessException("El servicio no está disponible.");
         }
+        Long empresaId = servicio.getEmpresa().getId();
+        return new DisponibilidadResponse(true, calcularSlots(
+                horarioDelDia(horarioAtencionRepository.findByEmpresaIdOrderByDiaSemana(empresaId), fecha), duracion,
+                citasVigentes(citaRepository.findByEmpresaIdAndFechaProgramada(empresaId, fecha))));
+    }
 
-        List<Cita> citasDelDia = citaRepository.findByEmpresaIdAndFechaProgramada(empresaId, fecha).stream()
+    // Guardar el horario crea los 7 dias: sin ninguno activo el veterinario sigue en propuesta libre
+    private boolean tieneDiaActivo(List<HorarioAtencion> horarios) {
+        return horarios.stream().anyMatch(h -> Boolean.TRUE.equals(h.getActivo()));
+    }
+
+    private HorarioAtencion horarioDelDia(List<HorarioAtencion> horarios, LocalDate fecha) {
+        return horarios.stream()
+                .filter(h -> h.getDiaSemana() == fecha.getDayOfWeek() && Boolean.TRUE.equals(h.getActivo()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<Cita> citasVigentes(List<Cita> citas) {
+        return citas.stream()
                 .filter(c -> c.getEstado() != AppointmentStatus.CANCELADA && c.getEstado() != AppointmentStatus.RECHAZADA)
                 .toList();
+    }
 
-        List<LocalTime> disponibles = new ArrayList<>();
-        for (LocalTime slotInicio : slots) {
-            LocalTime slotFin = slotInicio.plusMinutes(duracion);
-            long ocupadas = citasDelDia.stream()
-                    .filter(c -> c.getHoraInicio().isBefore(slotFin) && c.getHoraFin().isAfter(slotInicio))
-                    .count();
-            if (ocupadas < horario.getCapacidad()) {
-                disponibles.add(slotInicio);
-            }
+    private long cuposOcupados(List<Cita> citasDelDia, LocalTime inicio, LocalTime fin) {
+        return citasDelDia.stream()
+                .filter(c -> c.getHoraInicio().isBefore(fin) && c.getHoraFin().isAfter(inicio))
+                .count();
+    }
+
+    private List<DisponibilidadResponse.Slot> calcularSlots(HorarioAtencion horario, int duracion, List<Cita> citasDelDia) {
+        if (horario == null || duracion <= 0) {
+            return List.of();
         }
-        return disponibles;
+        List<DisponibilidadResponse.Slot> slots = new ArrayList<>();
+        LocalTime cursor = horario.getHoraInicio();
+        while (cursor.isBefore(horario.getHoraFin())) {
+            LocalTime fin = cursor.plusMinutes(duracion);
+            // !fin.isAfter(cursor): el bloque cruza la medianoche (LocalTime da la vuelta) y el bucle no terminaria
+            if (!fin.isAfter(cursor) || fin.isAfter(horario.getHoraFin())) {
+                break;
+            }
+            slots.add(new DisponibilidadResponse.Slot(cursor,
+                    cuposOcupados(citasDelDia, cursor, fin) < horario.getCapacidad()));
+            cursor = fin;
+        }
+        return slots;
     }
 }

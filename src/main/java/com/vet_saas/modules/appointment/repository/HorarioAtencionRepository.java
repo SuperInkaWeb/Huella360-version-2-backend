@@ -14,4 +14,8 @@ public interface HorarioAtencionRepository extends JpaRepository<HorarioAtencion
     List<HorarioAtencion> findByEmpresaIdOrderByDiaSemana(Long empresaId);
 
     Optional<HorarioAtencion> findByEmpresaIdAndDiaSemana(Long empresaId, DayOfWeek diaSemana);
+
+    List<HorarioAtencion> findByVeterinarioIdOrderByDiaSemana(Long veterinarioId);
+
+    Optional<HorarioAtencion> findByVeterinarioIdAndDiaSemana(Long veterinarioId, DayOfWeek diaSemana);
 }
