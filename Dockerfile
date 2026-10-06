@@ -31,15 +31,19 @@ USER appuser
 EXPOSE 8080
 
 # JVM tuning para contenedores con poca memoria (512MB plan Render)
-# - MaxRAMPercentage=50: Usa max 256MB para heap (deja ~256MB para OS, metaspace, stack, etc)
-# - MaxMetaspaceSize=128m: Limita metaspace para evitar crecimiento indefinido
-# - ZGC: Garbage collector de baja latencia y bajo overhead de memoria
-# - TrimNativeHeap: Libera memoria nativa al GC
+# Es la configuracion que corre estable en el ambiente QA con el mismo plan.
+# - MaxRAMPercentage=40: Usa max ~205MB para heap (deja ~300MB para metaspace, JIT, stacks y OS)
+# - MaxMetaspaceSize=160m: Con 128m o menos Spring Security no termina de arrancar (OOM Metaspace)
+# - SerialGC: Menor overhead fijo de memoria que ZGC en heaps chicos
+# - Xss256k: Stacks de thread mas livianos
+# No definir JAVA_TOOL_OPTIONS en Render: sus -Xmx/-XX pisan o chocan con estos valores
+# (un deploy fallo con "Multiple garbage collectors selected").
 ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=50.0", \
-    "-XX:InitialRAMPercentage=40.0", \
-    "-XX:MaxMetaspaceSize=128m", \
-    "-XX:+UseZGC", \
+    "-XX:MaxRAMPercentage=40.0", \
+    "-XX:InitialRAMPercentage=25.0", \
+    "-XX:MaxMetaspaceSize=160m", \
+    "-XX:+UseSerialGC", \
+    "-Xss256k", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]
