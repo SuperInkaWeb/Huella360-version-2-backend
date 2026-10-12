@@ -40,6 +40,8 @@ public class VeterinarioService {
             throw new BusinessException("El número de colegiatura ya está registrado");
         }
 
+        validarUbicacion(request);
+
         Veterinario veterinario = Veterinario.builder()
                 .usuario(usuario)
                 .nombres(request.nombres())
@@ -51,6 +53,10 @@ public class VeterinarioService {
                 .fotoPerfilUrl(request.fotoPerfilUrl())
                 .mpAccessToken(request.mpAccessToken() != null ? cryptoUtil.encrypt(request.mpAccessToken()) : null)
                 .mpPublicKey(request.mpPublicKey())
+                .direccion(request.direccion())
+                .ciudad(request.ciudad())
+                .ubicacionLat(request.latitud())
+                .ubicacionLng(request.longitud())
                 .build();
 
         Veterinario saved = veterinarioRepository.save(veterinario);
@@ -90,7 +96,24 @@ public class VeterinarioService {
             veterinario.setMpPublicKey(request.mpPublicKey());
         }
 
+        validarUbicacion(request);
+        if (request.direccion() != null)
+            veterinario.setDireccion(request.direccion());
+        if (request.ciudad() != null)
+            veterinario.setCiudad(request.ciudad());
+        if (request.latitud() != null) {
+            veterinario.setUbicacionLat(request.latitud());
+            veterinario.setUbicacionLng(request.longitud());
+        }
+
         return mapToResponse(veterinarioRepository.save(veterinario));
+    }
+
+    // El punto del mapa llega completo (latitud y longitud) o no llega.
+    private void validarUbicacion(VeterinarioRequest request) {
+        if ((request.latitud() == null) != (request.longitud() == null)) {
+            throw new BusinessException("La ubicación debe incluir latitud y longitud");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -145,6 +168,10 @@ public class VeterinarioService {
                 vet.getFotoPerfilUrl(),
                 vet.getEstadoValidacion(),
                 vet.getUsuario().getCorreo(),
-                vet.getMpPublicKey());
+                vet.getMpPublicKey(),
+                vet.getDireccion(),
+                vet.getCiudad(),
+                vet.getUbicacionLat(),
+                vet.getUbicacionLng());
     }
 }
