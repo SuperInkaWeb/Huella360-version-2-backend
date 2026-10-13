@@ -72,7 +72,7 @@ public class ClienteController {
             fotoUrl = storageService.uploadFile(foto, "clientes");
         }
 
-        UpdateClienteDto safeDto = dto != null ? dto : new UpdateClienteDto(null, null, null, null, null, null);
+        UpdateClienteDto safeDto = dto != null ? dto : new UpdateClienteDto(null, null, null, null, null, null, null, null);
 
         return ResponseEntity
                 .ok(ApiResponse.success(clienteService.updateMyPerfil(usuario, safeDto, fotoUrl),
