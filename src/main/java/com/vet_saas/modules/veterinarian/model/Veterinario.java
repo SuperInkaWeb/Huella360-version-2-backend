@@ -9,6 +9,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -46,6 +47,16 @@ public class Veterinario {
 
     @Column(name = "foto_perfil_url")
     private String fotoPerfilUrl;
+
+    private String direccion;
+
+    private String ciudad;
+
+    @Column(name = "ubicacion_lat", precision = 10, scale = 8)
+    private BigDecimal ubicacionLat;
+
+    @Column(name = "ubicacion_lng", precision = 11, scale = 8)
+    private BigDecimal ubicacionLng;
 
     @Column(name = "mp_access_token")
     private String mpAccessToken;
