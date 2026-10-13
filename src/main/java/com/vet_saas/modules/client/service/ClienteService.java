@@ -46,6 +46,8 @@ public class ClienteService {
             throw new BusinessException("Ya tienes un perfil de cliente registrado.");
         }
 
+        validarUbicacion(dto.latitud(), dto.longitud());
+
         PerfilCliente perfil = PerfilCliente.builder()
                 .usuario(usuario)
                 .nombres(dto.nombres())
@@ -54,6 +56,8 @@ public class ClienteService {
                 .direccion(dto.direccion())
                 .ciudad(dto.ciudad())
                 .pais(dto.pais() != null ? dto.pais() : appProperties.getBusiness().getDefaultCountry())
+                .ubicacionLat(dto.latitud())
+                .ubicacionLng(dto.longitud())
                 .activo(true)
                 .build();
 
@@ -80,12 +84,18 @@ public class ClienteService {
         PerfilCliente perfil = clienteRepository.findByUsuarioIdAndActivoTrue(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "usuarioId", usuario.getId()));
 
+        validarUbicacion(dto.latitud(), dto.longitud());
+
         if (dto.nombres() != null) perfil.setNombres(dto.nombres());
         if (dto.apellidos() != null) perfil.setApellidos(dto.apellidos());
         if (dto.telefono() != null) perfil.setTelefono(dto.telefono());
         if (dto.direccion() != null) perfil.setDireccion(dto.direccion());
         if (dto.ciudad() != null) perfil.setCiudad(dto.ciudad());
         if (dto.pais() != null) perfil.setPais(dto.pais());
+        if (dto.latitud() != null) {
+            perfil.setUbicacionLat(dto.latitud());
+            perfil.setUbicacionLng(dto.longitud());
+        }
         if (fotoUrl != null) perfil.setFotoPerfilUrl(fotoUrl);
 
         return mapToResponse(clienteRepository.save(perfil));
@@ -182,6 +192,13 @@ public class ClienteService {
         return clienteRepository.findById(id)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente", "id", id));
+    }
+
+    // El punto del mapa llega completo (latitud y longitud) o no llega.
+    private void validarUbicacion(BigDecimal latitud, BigDecimal longitud) {
+        if ((latitud == null) != (longitud == null)) {
+            throw new BusinessException("La ubicación debe incluir latitud y longitud");
+        }
     }
 
     private LocalDateTime maxNullable(LocalDateTime a, LocalDateTime b) {

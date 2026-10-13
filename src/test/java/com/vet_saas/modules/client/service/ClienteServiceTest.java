@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -73,7 +74,7 @@ class ClienteServiceTest {
     @Test
     void createPerfil_success() {
         Usuario user = buildUser(1L);
-        CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", "Av. Lima 123", "Lima", "Perú");
+        CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", "Av. Lima 123", "Lima", "Perú", null, null);
 
         when(clienteRepository.existsByUsuarioIdAndActivoTrue(1L)).thenReturn(false);
         when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> {
@@ -94,7 +95,7 @@ class ClienteServiceTest {
         Usuario user = buildUser(1L);
         when(clienteRepository.existsByUsuarioIdAndActivoTrue(1L)).thenReturn(true);
 
-        CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", null, null, null);
+        CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", null, null, null, null, null);
         assertThrows(BusinessException.class, () -> clienteService.createPerfil(user, dto));
     }
 
@@ -124,10 +125,84 @@ class ClienteServiceTest {
         when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = new com.vet_saas.modules.client.dto.UpdateClienteDto(
-                "Carlos", null, null, null, null, null);
+                "Carlos", null, null, null, null, null, null, null);
         ClienteResponse response = clienteService.updateMyPerfil(user, dto, null);
 
         assertEquals("Carlos", response.nombres());
+    }
+
+    @Test
+    void createPerfil_conUbicacion_guardaElPunto() {
+        Usuario user = buildUser(1L);
+        CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", "Av. Grau 123", "Piura", "Perú",
+                new BigDecimal("-5.19449"), new BigDecimal("-80.63282"));
+
+        when(clienteRepository.existsByUsuarioIdAndActivoTrue(1L)).thenReturn(false);
+        when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ClienteResponse response = clienteService.createPerfil(user, dto);
+
+        assertEquals(new BigDecimal("-5.19449"), response.ubicacionLat());
+        assertEquals(new BigDecimal("-80.63282"), response.ubicacionLng());
+    }
+
+    @Test
+    void createPerfil_ubicacionIncompleta_throwsBusinessException() {
+        Usuario user = buildUser(1L);
+        CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", null, null, null,
+                new BigDecimal("-5.19449"), null);
+
+        when(clienteRepository.existsByUsuarioIdAndActivoTrue(1L)).thenReturn(false);
+
+        assertThrows(BusinessException.class, () -> clienteService.createPerfil(user, dto));
+        verify(clienteRepository, never()).save(any());
+    }
+
+    @Test
+    void updateMyPerfil_conUbicacion_guardaElPunto() {
+        Usuario user = buildUser(1L);
+        PerfilCliente perfil = buildPerfil(user);
+        when(clienteRepository.findByUsuarioIdAndActivoTrue(1L)).thenReturn(Optional.of(perfil));
+        when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var dto = new com.vet_saas.modules.client.dto.UpdateClienteDto(
+                null, null, null, "Av. Grau 123", "Piura", null,
+                new BigDecimal("-5.19449"), new BigDecimal("-80.63282"));
+        ClienteResponse response = clienteService.updateMyPerfil(user, dto, null);
+
+        assertEquals("Piura", response.ciudad());
+        assertEquals(new BigDecimal("-5.19449"), response.ubicacionLat());
+        assertEquals(new BigDecimal("-80.63282"), response.ubicacionLng());
+    }
+
+    @Test
+    void updateMyPerfil_sinUbicacion_conservaLaGuardada() {
+        Usuario user = buildUser(1L);
+        PerfilCliente perfil = buildPerfil(user);
+        perfil.setUbicacionLat(new BigDecimal("-12.046374"));
+        perfil.setUbicacionLng(new BigDecimal("-77.042793"));
+        when(clienteRepository.findByUsuarioIdAndActivoTrue(1L)).thenReturn(Optional.of(perfil));
+        when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var dto = new com.vet_saas.modules.client.dto.UpdateClienteDto(
+                "Carlos", null, null, null, null, null, null, null);
+        ClienteResponse response = clienteService.updateMyPerfil(user, dto, null);
+
+        assertEquals(new BigDecimal("-12.046374"), response.ubicacionLat());
+        assertEquals(new BigDecimal("-77.042793"), response.ubicacionLng());
+    }
+
+    @Test
+    void updateMyPerfil_ubicacionIncompleta_throwsBusinessException() {
+        Usuario user = buildUser(1L);
+        PerfilCliente perfil = buildPerfil(user);
+        when(clienteRepository.findByUsuarioIdAndActivoTrue(1L)).thenReturn(Optional.of(perfil));
+
+        var dto = new com.vet_saas.modules.client.dto.UpdateClienteDto(
+                null, null, null, null, null, null, null, new BigDecimal("-80.63282"));
+
+        assertThrows(BusinessException.class, () -> clienteService.updateMyPerfil(user, dto, null));
+        verify(clienteRepository, never()).save(any());
     }
 
     @Test
