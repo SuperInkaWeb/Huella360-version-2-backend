@@ -6,6 +6,7 @@ import com.vet_saas.modules.user.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -20,6 +21,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -255,6 +258,116 @@ class Auth0JwtAuthenticationConverterTest {
         when(usuarioRepository.findById(42L)).thenReturn(Optional.of(testUser));
 
         assertThrows(DisabledException.class, () -> converter.convert(jwt));
+    }
+
+    // ─── H360-SEC-002: estado real del correo ───────────────────────────────
+    // Antes todo usuario creado desde Auth0 quedaba con el correo verificado, aunque no lo estuviera.
+
+    private Usuario crearDesdeToken(Map<String, Object> claims) {
+        Jwt jwt = buildAuth0Jwt(claims, "auth0|nuevo");
+        when(usuarioRepository.findByCorreo("nuevo@test.com")).thenReturn(Optional.empty());
+        when(usuarioRepository.findByAuth0Sub("auth0|nuevo")).thenReturn(Optional.empty());
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(inv -> {
+            Usuario u = inv.getArgument(0);
+            u.setEstado(true); // lo hace @PrePersist al guardar de verdad
+            return u;
+        });
+
+        converter.convert(jwt);
+
+        ArgumentCaptor<Usuario> guardado = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(guardado.capture());
+        return guardado.getValue();
+    }
+
+    @Test
+    void convert_auth0Token_usuarioNuevo_correoNoVerificado() {
+        Usuario creado = crearDesdeToken(Map.of(
+                "https://huella360.com/email", "nuevo@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, false));
+
+        assertFalse(creado.isEmailVerificado());
+    }
+
+    @Test
+    void convert_auth0Token_usuarioNuevo_correoVerificado() {
+        Usuario creado = crearDesdeToken(Map.of(
+                "https://huella360.com/email", "nuevo@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, true));
+
+        assertTrue(creado.isEmailVerificado());
+    }
+
+    @Test
+    void convert_auth0Token_usuarioNuevo_sinClaim_mantieneElComportamientoAnterior() {
+        // Mientras la Action de Auth0 (H360-SEC-001) no envie el dato, no cambia nada.
+        Usuario creado = crearDesdeToken(Map.of("https://huella360.com/email", "nuevo@test.com"));
+
+        assertTrue(creado.isEmailVerificado());
+    }
+
+    @Test
+    void convert_auth0Token_usuarioNuevo_aceptaElClaimEstandarComoTexto() {
+        Usuario creado = crearDesdeToken(Map.of(
+                "https://huella360.com/email", "nuevo@test.com",
+                "email_verified", "false"));
+
+        assertFalse(creado.isEmailVerificado());
+    }
+
+    @Test
+    void convert_auth0Token_usuarioExistente_verificaElCorreoCuandoAuth0LoConfirma() {
+        testUser.setEmailVerificado(false);
+        Jwt jwt = buildAuth0Jwt(Map.of(
+                "https://huella360.com/email", "test@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, true), "auth0|abc123");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+        when(usuarioRepository.save(testUser)).thenReturn(testUser);
+
+        converter.convert(jwt);
+
+        assertTrue(testUser.isEmailVerificado());
+        verify(usuarioRepository).save(testUser);
+    }
+
+    @Test
+    void convert_auth0Token_usuarioExistente_marcadoComoVerificadoSinEstarlo_seCorrige() {
+        testUser.setEmailVerificado(true);
+        Jwt jwt = buildAuth0Jwt(Map.of(
+                "https://huella360.com/email", "test@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, false), "auth0|abc123");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+        when(usuarioRepository.save(testUser)).thenReturn(testUser);
+
+        converter.convert(jwt);
+
+        assertFalse(testUser.isEmailVerificado());
+        verify(usuarioRepository).save(testUser);
+    }
+
+    @Test
+    void convert_auth0Token_usuarioExistente_sinCambios_noGuarda() {
+        testUser.setEmailVerificado(true);
+        Jwt jwt = buildAuth0Jwt(Map.of(
+                "https://huella360.com/email", "test@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, true), "auth0|abc123");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+
+        converter.convert(jwt);
+
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void convert_auth0Token_usuarioExistente_sinClaim_noCambiaNiGuarda() {
+        testUser.setEmailVerificado(false);
+        Jwt jwt = buildAuth0Jwt(Map.of("https://huella360.com/email", "test@test.com"), "auth0|abc123");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+
+        converter.convert(jwt);
+
+        assertFalse(testUser.isEmailVerificado());
+        verify(usuarioRepository, never()).save(any());
     }
 
     private Jwt buildAuth0Jwt(Map<String, Object> claims, String subject) {
