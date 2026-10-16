@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @RequiredArgsConstructor
@@ -24,8 +25,28 @@ public class WebhookEventService {
 
     private final WebhookEventRepository webhookEventRepository;
 
+    /**
+     * Aviso en memoria de que puede haber eventos por reintentar. Evita que el job consulte la
+     * BD cada minuto sin motivo: esa consulta mantenia despierta la base de Neon las 24 horas.
+     * Arranca en true para recuperar los eventos que quedaron de antes de un reinicio.
+     */
+    private final AtomicBoolean posiblesPendientes = new AtomicBoolean(true);
+
+    /** Devuelve el aviso y lo apaga; quien lo toma debe volver a encenderlo si quedan eventos. */
+    public boolean tomarAvisoDePendientes() {
+        return posiblesPendientes.getAndSet(false);
+    }
+
+    @Transactional(readOnly = true)
+    public void revisarSiQuedanPendientes() {
+        if (webhookEventRepository.existsOpenEvents()) {
+            posiblesPendientes.set(true);
+        }
+    }
+
     @Transactional
     public WebhookEvent saveEvent(String paymentId, String empresaId) {
+        posiblesPendientes.set(true);
         WebhookEvent event = WebhookEvent.builder()
                 .paymentId(paymentId)
                 .empresaId(empresaId)
@@ -50,6 +71,7 @@ public class WebhookEventService {
 
     @Transactional
     public void markFailed(Long eventId, String error) {
+        posiblesPendientes.set(true);
         int nextDelayMinutes = calculateBackoff(eventId);
         webhookEventRepository.markFailed(eventId, error, LocalDateTime.now().plusMinutes(nextDelayMinutes));
     }
