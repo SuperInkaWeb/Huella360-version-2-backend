@@ -9,6 +9,7 @@ import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.modules.user.service.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,6 +23,9 @@ public class UserController {
     private final UsuarioService usuarioService;
     private final UsuarioRepository usuarioRepository;
 
+    @Value("${app.security.exigir-correo-verificado:false}")
+    private boolean exigirCorreoVerificado;
+
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<UserMeResponse>> getMe(@AuthenticationPrincipal Usuario usuario) {
@@ -29,7 +33,8 @@ public class UserController {
                 usuario.getId(),
                 usuario.getCorreo(),
                 usuario.getRol(),
-                usuario.isEmailVerificado()
+                usuario.isEmailVerificado(),
+                exigirCorreoVerificado && !usuario.isEmailVerificado()
         );
         return ResponseEntity.ok(ApiResponse.success(response, "Información del usuario"));
     }
