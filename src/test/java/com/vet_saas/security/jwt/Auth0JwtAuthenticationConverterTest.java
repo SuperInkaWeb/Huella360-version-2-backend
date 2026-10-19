@@ -317,6 +317,7 @@ class Auth0JwtAuthenticationConverterTest {
 
     @Test
     void convert_auth0Token_usuarioExistente_verificaElCorreoCuandoAuth0LoConfirma() {
+        testUser.setAuth0Sub("auth0|abc123");
         testUser.setEmailVerificado(false);
         Jwt jwt = buildAuth0Jwt(Map.of(
                 "https://huella360.com/email", "test@test.com",
@@ -332,6 +333,7 @@ class Auth0JwtAuthenticationConverterTest {
 
     @Test
     void convert_auth0Token_usuarioExistente_marcadoComoVerificadoSinEstarlo_seCorrige() {
+        testUser.setAuth0Sub("auth0|abc123");
         testUser.setEmailVerificado(true);
         Jwt jwt = buildAuth0Jwt(Map.of(
                 "https://huella360.com/email", "test@test.com",
@@ -347,6 +349,7 @@ class Auth0JwtAuthenticationConverterTest {
 
     @Test
     void convert_auth0Token_usuarioExistente_sinCambios_noGuarda() {
+        testUser.setAuth0Sub("auth0|abc123");
         testUser.setEmailVerificado(true);
         Jwt jwt = buildAuth0Jwt(Map.of(
                 "https://huella360.com/email", "test@test.com",
@@ -367,6 +370,80 @@ class Auth0JwtAuthenticationConverterTest {
         converter.convert(jwt);
 
         assertFalse(testUser.isEmailVerificado());
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void convert_auth0Token_otraIdentidadConCorreoSinVerificar_noEntraALaCuentaExistente() {
+        // Alguien se registra en Auth0 con el correo de otra persona y no lo verifica.
+        testUser.setAuth0Sub("auth0|duenio");
+        testUser.setEmailVerificado(true);
+        Jwt jwt = buildAuth0Jwt(Map.of(
+                "https://huella360.com/email", "test@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, false), "auth0|otro");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+
+        assertThrows(CorreoNoVerificadoException.class, () -> converter.convert(jwt));
+
+        assertTrue(testUser.isEmailVerificado());
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void convert_auth0Token_cuentaSinIdentidadYCorreoSinVerificar_noEntra() {
+        // Cliente invitado creado al agendar una cita: la cuenta no tiene identidad de Auth0.
+        testUser.setEmailVerificado(false);
+        Jwt jwt = buildAuth0Jwt(Map.of(
+                "https://huella360.com/email", "test@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, false), "auth0|nuevo");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+
+        assertThrows(CorreoNoVerificadoException.class, () -> converter.convert(jwt));
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void convert_auth0Token_cuentaSinIdentidadYCorreoVerificado_seVinculaYSeVerifica() {
+        testUser.setEmailVerificado(false);
+        Jwt jwt = buildAuth0Jwt(Map.of(
+                "https://huella360.com/email", "test@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, true), "auth0|nuevo");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+        when(usuarioRepository.save(testUser)).thenReturn(testUser);
+
+        converter.convert(jwt);
+
+        assertEquals("auth0|nuevo", testUser.getAuth0Sub());
+        assertTrue(testUser.isEmailVerificado());
+        verify(usuarioRepository).save(testUser);
+    }
+
+    @Test
+    void convert_auth0Token_otraIdentidadConCorreoVerificado_entraSinCambiarLaIdentidadGuardada() {
+        // Mismo duenio con otra conexion (p. ej. Google y correo/contrasena).
+        testUser.setAuth0Sub("auth0|duenio");
+        testUser.setEmailVerificado(true);
+        Jwt jwt = buildAuth0Jwt(Map.of(
+                "https://huella360.com/email", "test@test.com",
+                Auth0JwtAuthenticationConverter.AUTH0_EMAIL_VERIFIED_CLAIM, true), "google-oauth2|123");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+
+        var result = converter.convert(jwt);
+
+        assertEquals(testUser, result.getPrincipal());
+        assertEquals("auth0|duenio", testUser.getAuth0Sub());
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void convert_auth0Token_otraIdentidadSinClaim_mantieneElComportamientoAnterior() {
+        testUser.setAuth0Sub("auth0|duenio");
+        Jwt jwt = buildAuth0Jwt(Map.of("https://huella360.com/email", "test@test.com"), "auth0|otro");
+        when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(testUser));
+
+        var result = converter.convert(jwt);
+
+        assertEquals(testUser, result.getPrincipal());
         verify(usuarioRepository, never()).save(any());
     }
 

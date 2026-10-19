@@ -42,6 +42,6 @@ public class UsuarioService {
         usuario.setRol(nuevoRol);
         usuarioRepository.save(usuario);
 
-        return new UserMeResponse(usuario.getId(), usuario.getCorreo(), nuevoRol);
+        return new UserMeResponse(usuario.getId(), usuario.getCorreo(), nuevoRol, usuario.isEmailVerificado());
     }
 }

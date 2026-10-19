@@ -28,7 +28,8 @@ public class UserController {
         UserMeResponse response = new UserMeResponse(
                 usuario.getId(),
                 usuario.getCorreo(),
-                usuario.getRol()
+                usuario.getRol(),
+                usuario.isEmailVerificado()
         );
         return ResponseEntity.ok(ApiResponse.success(response, "Información del usuario"));
     }

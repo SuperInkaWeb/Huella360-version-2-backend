@@ -36,6 +36,9 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
     public static final String CUENTA_DESACTIVADA_MSG =
             "Tu cuenta fue desactivada. Si crees que es un error, contacta a soporte.";
 
+    public static final String CORREO_AJENO_MSG =
+            "Verifica tu correo con el enlace que te enviamos al registrarte y vuelve a iniciar sesión.";
+
     // Claims personalizados de Auth0
     private static final String AUTH0_EMAIL_CLAIM = "https://vet-saas.com/email";
     private static final String AUTH0_EMAIL_CLAIM_ALT = "https://huella360.com/email";
@@ -55,8 +58,8 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
             } else {
                 return convertAuth0Token(jwt);
             }
-        } catch (DisabledException e) {
-            // Cuenta desactivada por el admin: se propaga tal cual para que el entry point la distinga.
+        } catch (DisabledException | CorreoNoVerificadoException e) {
+            // Se propagan tal cual para que el entry point las distinga.
             throw e;
         } catch (Exception e) {
             log.error("Error convirtiendo JWT a Authentication: {}", e.getMessage(), e);
@@ -109,11 +112,8 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
                     "No se pudo autenticar. Asegurate de completar el registro en la plataforma.");
         }
 
-        // El correo puede verificarse (o la cuenta reemplazarse) despues del registro: se guarda solo si cambio.
-        if (correoVerificado != null && usuario.isEmailVerificado() != correoVerificado) {
-            log.info("Estado del correo actualizado desde Auth0. Usuario ID: {}, verificado: {}", usuario.getId(), correoVerificado);
-            usuario.setEmailVerificado(correoVerificado);
-            usuario = usuarioRepository.save(usuario);
+        if (correoVerificado != null) {
+            usuario = aplicarEstadoDelCorreo(usuario, jwt.getSubject(), correoVerificado);
         }
 
         verificarCuentaActiva(usuario);
@@ -140,6 +140,37 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
                 null,
                 authorities
         );
+    }
+
+    /**
+     * La cuenta se busca por correo, asi que una identidad de Auth0 distinta (otra conexion o alguien
+     * que se registro con un correo ajeno) puede llegar a una cuenta existente. Solo se acepta si
+     * Auth0 confirma que esa identidad es duena del correo.
+     */
+    private Usuario aplicarEstadoDelCorreo(Usuario usuario, String subject, boolean correoVerificado) {
+        boolean mismaIdentidad = subject != null && subject.equals(usuario.getAuth0Sub());
+        boolean cambio = false;
+
+        if (!mismaIdentidad) {
+            if (!correoVerificado) {
+                log.warn("Acceso rechazado: identidad de Auth0 con el correo sin verificar sobre una cuenta existente. Usuario ID: {}",
+                        usuario.getId());
+                throw new CorreoNoVerificadoException(CORREO_AJENO_MSG);
+            }
+            if (usuario.getAuth0Sub() == null) {
+                // Cuenta creada fuera de Auth0 (p. ej. cliente invitado de una cita): se vincula.
+                usuario.setAuth0Sub(subject);
+                cambio = true;
+            }
+        }
+
+        // El correo puede verificarse (o la cuenta reemplazarse) despues del registro: se guarda solo si cambio.
+        if (usuario.isEmailVerificado() != correoVerificado) {
+            log.info("Estado del correo actualizado desde Auth0. Usuario ID: {}, verificado: {}", usuario.getId(), correoVerificado);
+            usuario.setEmailVerificado(correoVerificado);
+            cambio = true;
+        }
+        return cambio ? usuarioRepository.save(usuario) : usuario;
     }
 
     private String extractEmailFromAuth0Claims(Jwt jwt) {

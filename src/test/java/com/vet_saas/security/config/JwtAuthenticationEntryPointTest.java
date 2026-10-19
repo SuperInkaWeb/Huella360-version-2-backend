@@ -1,6 +1,7 @@
 package com.vet_saas.security.config;
 
 import com.vet_saas.security.jwt.Auth0JwtAuthenticationConverter;
+import com.vet_saas.security.jwt.CorreoNoVerificadoException;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -35,6 +36,18 @@ class JwtAuthenticationEntryPointTest {
                 new InvalidBearerTokenException("token", new DisabledException("x")));
 
         assertTrue(response.getContentAsString().contains("ACCOUNT_DISABLED"));
+    }
+
+    @Test
+    void correoNoVerificado_responde403EmailNotVerified() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        entryPoint.commence(new MockHttpServletRequest(), response,
+                new InvalidBearerTokenException("token", new CorreoNoVerificadoException("x")));
+
+        assertEquals(403, response.getStatus());
+        String body = response.getContentAsString();
+        assertTrue(body.contains("\"error\":\"EMAIL_NOT_VERIFIED\""), body);
     }
 
     @Test

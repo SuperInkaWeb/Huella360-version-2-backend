@@ -3,7 +3,9 @@ package com.vet_saas.security.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.vet_saas.security.filter.CorreoVerificadoFilter;
 import com.vet_saas.security.jwt.Auth0JwtAuthenticationConverter;
+import com.vet_saas.security.jwt.CorreoNoVerificadoException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,20 +29,32 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setCharacterEncoding("UTF-8");
 
-        // El frontend usa error=ACCOUNT_DISABLED para avisar al usuario en vez de "sesion expirada".
+        // El frontend usa error=ACCOUNT_DISABLED / EMAIL_NOT_VERIFIED para avisar al usuario en vez de "sesion expirada".
         boolean cuentaDesactivada = authException instanceof DisabledException
                 || authException.getCause() instanceof DisabledException;
+        boolean correoNoVerificado = authException instanceof CorreoNoVerificadoException
+                || authException.getCause() instanceof CorreoNoVerificadoException;
+
+        int status = correoNoVerificado ? HttpServletResponse.SC_FORBIDDEN : HttpServletResponse.SC_UNAUTHORIZED;
+        String error = "Unauthorized";
+        String message = "No autorizado: Token inválido o ausente";
+        if (cuentaDesactivada) {
+            error = "ACCOUNT_DISABLED";
+            message = Auth0JwtAuthenticationConverter.CUENTA_DESACTIVADA_MSG;
+        } else if (correoNoVerificado) {
+            error = CorreoVerificadoFilter.ERROR_CODE;
+            message = Auth0JwtAuthenticationConverter.CORREO_AJENO_MSG;
+        }
+        response.setStatus(status);
 
         Map<String, Object> body = Map.of(
                 "timestamp", LocalDateTime.now(),
                 "success", false,
-                "status", 401,
-                "error", cuentaDesactivada ? "ACCOUNT_DISABLED" : "Unauthorized",
-                "message", cuentaDesactivada
-                        ? Auth0JwtAuthenticationConverter.CUENTA_DESACTIVADA_MSG
-                        : "No autorizado: Token inválido o ausente",
+                "status", status,
+                "error", error,
+                "message", message,
                 "path", request.getRequestURI()
         );
 

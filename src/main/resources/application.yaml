@@ -79,6 +79,8 @@ app:
   auth0:
     issuer: ${AUTH0_ISSUER_URI}
     audience: ${AUTH0_AUDIENCE}
+    management-client-id: ${AUTH0_MGMT_CLIENT_ID:}
+    management-client-secret: ${AUTH0_MGMT_CLIENT_SECRET:}
 
   jwt:
     secret: ${JWT_SECRET}
@@ -88,6 +90,8 @@ app:
   security:
     encryption:
       secret: ${APP_ENCRYPTION_SECRET}
+    # Encender solo cuando la Action de Auth0 envie email_verified (H360-SEC-001).
+    exigir-correo-verificado: ${APP_EXIGIR_CORREO_VERIFICADO:false}
 
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
