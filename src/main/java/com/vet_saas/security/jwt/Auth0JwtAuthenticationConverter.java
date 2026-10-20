@@ -41,6 +41,8 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
     private static final String AUTH0_EMAIL_CLAIM_ALT = "https://huella360.com/email";
     private static final String AUTH0_ROLES_CLAIM = "https://vet-saas.com/roles";
     private static final String AUTH0_ROLES_CLAIM_ALT = "https://huella360.com/role";
+    // Lo agrega la Action de post-login de Auth0 (H360-SEC-001) con event.user.email_verified.
+    static final String AUTH0_EMAIL_VERIFIED_CLAIM = "https://huella360.com/email_verified";
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
@@ -84,6 +86,8 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
             }
         }
 
+        Boolean correoVerificado = extractEmailVerifiedFromAuth0Claims(jwt);
+
         // Auto-crear usuario en el primer login de Auth0
         if (usuario == null && email != null && !email.isBlank()) {
             log.info("Usuario no encontrado. Creando usuario desde Auth0. Email: {}, Subject: {}", email, jwt.getSubject());
@@ -92,7 +96,8 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
                     .password("[AUTH0]")  // Placeholder - Auth0 maneja la contraseña
                     .auth0Sub(jwt.getSubject())
                     .rol(null)  // Sin rol por defecto - el usuario debe seleccionarlo
-                    .emailVerificado(true)
+                    // Sin el claim (Action de Auth0 aun no desplegada) se mantiene el comportamiento anterior.
+                    .emailVerificado(correoVerificado == null || correoVerificado)
                     .build();
             usuario = usuarioRepository.save(usuario);
             log.info("Usuario creado exitosamente desde Auth0. ID: {}", usuario.getId());
@@ -102,6 +107,13 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
             log.warn("Usuario no encontrado y no se pudo crear. Email: {}, Subject: {}", email, jwt.getSubject());
             throw new org.springframework.security.authentication.BadCredentialsException(
                     "No se pudo autenticar. Asegurate de completar el registro en la plataforma.");
+        }
+
+        // El correo puede verificarse (o la cuenta reemplazarse) despues del registro: se guarda solo si cambio.
+        if (correoVerificado != null && usuario.isEmailVerificado() != correoVerificado) {
+            log.info("Estado del correo actualizado desde Auth0. Usuario ID: {}, verificado: {}", usuario.getId(), correoVerificado);
+            usuario.setEmailVerificado(correoVerificado);
+            usuario = usuarioRepository.save(usuario);
         }
 
         verificarCuentaActiva(usuario);
@@ -157,6 +169,23 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
 
         // NO usar "sub" como fallback - auth0|xxx no es un email
         log.warn("No se encontro email en claims del JWT. Claims disponibles: {}", jwt.getClaims());
+        return null;
+    }
+
+    /**
+     * Estado real del correo segun Auth0, o null si el token no lo trae.
+     * Acepta el claim con namespace (access token) o el estandar "email_verified".
+     */
+    private Boolean extractEmailVerifiedFromAuth0Claims(Jwt jwt) {
+        for (String claim : List.of(AUTH0_EMAIL_VERIFIED_CLAIM, "email_verified")) {
+            Object valor = jwt.getClaim(claim);
+            if (valor instanceof Boolean b) {
+                return b;
+            }
+            if (valor instanceof String s && !s.isBlank()) {
+                return Boolean.parseBoolean(s.trim());
+            }
+        }
         return null;
     }
 
