@@ -25,13 +25,21 @@ public class WebhookRetryScheduler {
 
     @Scheduled(fixedDelayString = "${app.webhooks.retry-interval-ms:60000}", initialDelay = 60000)
     public void retryFailedWebhooks() {
-        List<WebhookEvent> events = webhookEventService.findRetryableEvents();
-        if (events.isEmpty()) {
+        // Sin webhooks nuevos ni fallidos no se toca la BD, para que Neon pueda apagarse.
+        if (!webhookEventService.tomarAvisoDePendientes()) {
             return;
         }
-        LOGGER.info("Reintentando {} webhook(s) pendientes", events.size());
-        for (WebhookEvent event : events) {
-            webhookOrchestrator.process(event.getId(), event.getPaymentId(), event.getEmpresaId());
+        try {
+            List<WebhookEvent> events = webhookEventService.findRetryableEvents();
+            if (!events.isEmpty()) {
+                LOGGER.info("Reintentando {} webhook(s) pendientes", events.size());
+                for (WebhookEvent event : events) {
+                    webhookOrchestrator.process(event.getId(), event.getPaymentId(), event.getEmpresaId());
+                }
+            }
+        } finally {
+            // Eventos aun en su margen de espera o con mas intentos por delante.
+            webhookEventService.revisarSiQuedanPendientes();
         }
     }
 }

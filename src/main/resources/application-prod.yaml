@@ -4,7 +4,8 @@ spring:
       maximum-pool-size: ${DB_POOL_MAX:10}
       minimum-idle: ${DB_POOL_MIN:0}
       connection-timeout: 10000
-      idle-timeout: 600000
+      # Cierra pronto las conexiones sin uso: con una conexion abierta, Neon no se apaga.
+      idle-timeout: ${DB_IDLE_TIMEOUT:60000}
       max-lifetime: 1800000
       leak-detection-threshold: 60000
 

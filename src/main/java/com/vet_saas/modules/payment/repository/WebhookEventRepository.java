@@ -16,6 +16,11 @@ public interface WebhookEventRepository extends JpaRepository<WebhookEvent, Long
            "AND we.attempts < we.maxAttempts AND we.nextRetryAt <= :now")
     List<WebhookEvent> findRetryableEvents(LocalDateTime now);
 
+    // Eventos que todavia pueden reintentarse, aunque su nextRetryAt aun no haya llegado.
+    @Query("SELECT COUNT(we) > 0 FROM WebhookEvent we WHERE we.status IN ('PENDING', 'FAILED') " +
+           "AND we.attempts < we.maxAttempts")
+    boolean existsOpenEvents();
+
     @Modifying
     @Query("UPDATE WebhookEvent we SET we.status = 'COMPLETED' WHERE we.paymentId = :paymentId AND we.status != 'COMPLETED'")
     int markCompletedByPaymentId(String paymentId);
