@@ -2,6 +2,7 @@ package com.vet_saas.security.config;
 
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
+import com.vet_saas.security.filter.CorreoVerificadoFilter;
 import com.vet_saas.security.jwt.Auth0JwtAuthenticationConverter;
 import com.vet_saas.security.jwt.Auth0JwtDecoder;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -38,6 +40,9 @@ public class SecurityConfig {
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
+
+    @Value("${app.security.exigir-correo-verificado:false}")
+    private boolean exigirCorreoVerificado;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -248,6 +253,11 @@ public class SecurityConfig {
                                 )
                         )
                         .authenticationEntryPoint(jwtEntryPoint)
+                )
+
+                .addFilterAfter(
+                        new CorreoVerificadoFilter(exigirCorreoVerificado),
+                        BearerTokenAuthenticationFilter.class
                 );
 
         return http.build();

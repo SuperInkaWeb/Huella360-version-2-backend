@@ -42,6 +42,7 @@ public class UsuarioService {
         usuario.setRol(nuevoRol);
         usuarioRepository.save(usuario);
 
-        return new UserMeResponse(usuario.getId(), usuario.getCorreo(), nuevoRol);
+        // Si el backend exige el correo verificado, esta ruta ya fue bloqueada antes de llegar aqui.
+        return new UserMeResponse(usuario.getId(), usuario.getCorreo(), nuevoRol, usuario.isEmailVerificado(), false);
     }
 }

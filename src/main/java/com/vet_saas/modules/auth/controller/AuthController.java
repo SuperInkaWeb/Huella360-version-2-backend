@@ -3,6 +3,7 @@ package com.vet_saas.modules.auth.controller;
 import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.auth.dto.*;
 import com.vet_saas.modules.auth.service.AuthService;
+import com.vet_saas.modules.auth.service.ReenvioVerificacionService;
 import com.vet_saas.modules.auth.service.RefreshTokenService;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
@@ -22,6 +23,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
+    private final ReenvioVerificacionService reenvioVerificacionService;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@RequestBody @Valid RegisterRequest request) {
@@ -71,6 +73,15 @@ public class AuthController {
         authService.verifyEmail(token);
         return ResponseEntity.ok(
                 ApiResponse.successMessage("Correo verificado exitosamente"));
+    }
+
+    // Abierto aunque el correo no este verificado (CorreoVerificadoFilter deja pasar /auth/**).
+    @PostMapping("/resend-verification")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> resendVerification(@AuthenticationPrincipal Usuario usuario) {
+        reenvioVerificacionService.reenviar(usuario);
+        return ResponseEntity.ok(
+                ApiResponse.successMessage("Te enviamos un nuevo enlace de verificación. Revisa tu correo."));
     }
 
     @PostMapping("/forgot-password")

@@ -24,6 +24,9 @@ public class AppProperties {
     public static class Auth0 {
         private String issuer;
         private String audience;
+        // Aplicacion M2M con el permiso update:users, para reenviar el correo de verificacion.
+        private String managementClientId;
+        private String managementClientSecret;
     }
 
     @Data
