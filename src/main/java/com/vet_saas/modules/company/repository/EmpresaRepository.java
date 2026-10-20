@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -56,4 +58,17 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     Page<Empresa> buscarParaAdminPorEstado(@Param("q") String q,
             @Param("estado") com.vet_saas.modules.veterinarian.model.VerificationStatus estado,
             Pageable pageable);
+
+    // Busqueda por cercania: empresas con ubicacion dentro de un recuadro alrededor del punto.
+    // La distancia exacta y el radio se calculan despues en CercaniaService.
+    @Query("""
+            SELECT e FROM Empresa e
+            WHERE e.estadoValidacion = :estado
+              AND e.ubicacionLat BETWEEN :latMin AND :latMax
+              AND e.ubicacionLng BETWEEN :lngMin AND :lngMax
+            """)
+    List<Empresa> buscarEnRecuadro(
+            @Param("estado") com.vet_saas.modules.veterinarian.model.VerificationStatus estado,
+            @Param("latMin") BigDecimal latMin, @Param("latMax") BigDecimal latMax,
+            @Param("lngMin") BigDecimal lngMin, @Param("lngMax") BigDecimal lngMax);
 }
